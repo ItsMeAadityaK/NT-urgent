@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NT Correspondence Triage — Dispatch Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="dispatch-header">
+  <div class="header-left">
+    <h1>Correspondence Triage <span class="build-tag">DISPATCH CONSOLE</span></h1>
+    <p class="subtitle">Wet-season correspondence unit — access-aware prioritisation, comms-dropout
+    detection and mandatory human escalation. AI assists; a human decides.</p>
+  </div>
+
+  <div class="header-right">
+    <div class="clock-block">
+      <span class="label">SIM. TIME</span>
+      <div class="clock-value" id="clockValue">—:—</div>
+      <div class="clock-date" id="clockDate">—</div>
+    </div>
+  </div>
+</header>
+
+<div class="control-bar">
+  <button id="playBtn" class="ctrl-btn" title="Auto-advance the clock">&#9654; PLAY</button>
+  <input type="range" id="clockSlider" min="0" max="480" step="15" value="30">
+  <span class="ctrl-readout" id="minutesReadout">+30 min</span>
+  <select id="speedSelect" class="ctrl-select" title="Auto-advance speed">
+    <option value="900">1x</option>
+    <option value="450">2x</option>
+    <option value="150" selected>6x</option>
+  </select>
+  <button id="resetBtn" class="ctrl-btn ghost" title="Clear all acknowledgements">RESET ACKS</button>
+</div>
+
+<section class="stat-row" id="statRow"></section>
+
+<nav class="view-tabs">
+  <button class="tab-btn active" data-view="queue">Message Queue</button>
+  <button class="tab-btn" data-view="map">NT Map</button>
+  <button class="tab-btn" data-view="compare">LLM vs Baseline</button>
+  <button class="tab-btn" data-view="fairness">Fairness Audit</button>
+</nav>
+
+<main>
+  <section id="view-queue" class="view active">
+    <div class="queue-meta" id="queueMeta"></div>
+    <div id="queueList"></div>
+  </section>
+
+  <section id="view-map" class="view">
+    <p class="view-note">Schematic layout of the Northern Territory, Top End to Central Australia —
+    relative positions only, not to scale. Pin colour reflects the highest active priority at that
+    location right now.</p>
+    <div class="map-wrap">
+      <svg id="ntMap" viewBox="0 0 500 900" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="map-side">
+        <div class="legend">
+          <div class="legend-row"><span class="dot" style="--c:#C1272D"></span>Critical</div>
+          <div class="legend-row"><span class="dot" style="--c:#C97A2B"></span>High</div>
+          <div class="legend-row"><span class="dot" style="--c:#A69422"></span>Medium</div>
+          <div class="legend-row"><span class="dot" style="--c:#3D6B63"></span>Low</div>
+        </div>
+        <div id="mapDetail" class="map-detail">Click a location pin to see its active messages.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-compare" class="view">
+    <h3>LLM vs Baseline — where do they disagree?</h3>
+    <p id="baselineEvalNote" class="view-note"></p>
+    <div id="compareTableWrap"></div>
+    <p id="compareNote" class="view-note"></p>
+  </section>
+
+  <section id="view-fairness" class="view">
+    <h3>Formal vs informal phrasing — does urgency detection stay consistent?</h3>
+    <p class="view-note">Five matched pairs, one per urgency band. Each pair describes the SAME
+    underlying situation two different ways — once in informal/SMS style, once in formal written
+    English. A fair system should score both sides of a pair identically; if it doesn't, that's a
+    real finding, not a bug to hide.</p>
+    <div id="fairnessPairs"></div>
+    <div id="fairnessSummary"></div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
