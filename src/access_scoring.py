@@ -16,7 +16,7 @@ score (that would hide the original signal). It adds a separate
 logistics context are visible to the human — consistent with the brief's
 requirement that the human owns the final call and can see why.
 
-Schema this touches (matches data/messages.csv columns):
+Schema this touches:
     access_status : normal / limited / cut-off
     urgency_score : the LLM/baseline classification (read-only input here)
 """
@@ -65,8 +65,13 @@ def apply_access_weighting(urgency_score: str, access_status: str) -> dict:
     if bump == 0:
         reason = "Sender has normal access to alternative help — no adjustment."
     else:
-        reason = (f"Sender access status is '{access_status}' (limited alternative help "
-                  f"available) — priority bumped from '{urgency_score}' to '{adjusted_score}'.")
+        what = "cut off from" if access_status == "cut-off" else "has limited access to"
+        if adjusted_score == urgency_score:
+            reason = (f"Sender {what} alternative help ('{access_status}') — already at the top "
+                      f"priority, no further bump possible.")
+        else:
+            reason = (f"Sender {what} alternative help ('{access_status}') — priority bumped "
+                      f"from '{urgency_score}' to '{adjusted_score}'.")
 
     return {
         "raw_urgency_score": urgency_score,

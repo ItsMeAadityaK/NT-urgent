@@ -30,6 +30,15 @@ TIMEOUT_MINUTES = {
 }
 
 
+# Escalation chain. Level 1 fires when the timeout is breached; level 2
+# fires at twice the timeout if it's STILL unacknowledged — a dead-man's
+# switch that keeps climbing rather than alerting once and going quiet.
+ESCALATION_CHAIN = {
+    1: "Shift supervisor",
+    2: "Duty manager",
+}
+
+
 def check_escalation_timeout(message: dict, current_time: datetime = None) -> dict:
     """
     Check whether a message has breached its acknowledgement timeout and
@@ -37,36 +46,45 @@ def check_escalation_timeout(message: dict, current_time: datetime = None) -> di
 
     Args:
         message: dict with at least:
-            urgency_score   (str: low/medium/high/critical)
+            urgency_score   (str: low/medium/high/critical) — pass the FINAL
+                            priority the officer sees (after access weighting
+                            and safety-net floors), so the clock matches the
+                            colour on screen.
             timestamp       (datetime: when the message arrived)
             acknowledged    (bool)
         current_time: for testing — defaults to now if not supplied.
 
     Returns:
-        dict: {"should_escalate": bool, "reason": str}
+        dict: {"should_escalate": bool, "level": 0|1|2, "escalate_to": str|None,
+               "waited_minutes": int, "sla_minutes": int|None, "reason": str}
     """
     current_time = current_time or datetime.now()
-
-    if message.get("acknowledged"):
-        return {"should_escalate": False, "reason": "Already acknowledged by a human."}
-
     urgency = message.get("urgency_score", "low")
     timeout = TIMEOUT_MINUTES.get(urgency)
+    waited = int((current_time - message["timestamp"]).total_seconds() // 60)
+    base = {"waited_minutes": waited, "sla_minutes": timeout}
+
+    if message.get("acknowledged"):
+        return {**base, "should_escalate": False, "level": 0, "escalate_to": None,
+                "reason": "Already acknowledged by a human."}
 
     if timeout is None:
-        return {"should_escalate": False, "reason": f"'{urgency}' messages do not auto-escalate."}
+        return {**base, "should_escalate": False, "level": 0, "escalate_to": None,
+                "reason": f"'{urgency}' messages do not auto-escalate."}
 
-    elapsed = current_time - message["timestamp"]
-    if elapsed > timedelta(minutes=timeout):
+    if waited > timeout:
+        level = 2 if waited > 2 * timeout else 1
+        target = ESCALATION_CHAIN[level]
         return {
-            "should_escalate": True,
-            "reason": f"Unacknowledged '{urgency}' message has been waiting {elapsed} "
-                      f"(limit was {timeout} minutes) — auto-escalating to supervisor.",
+            **base, "should_escalate": True, "level": level, "escalate_to": target,
+            "reason": f"Unacknowledged '{urgency}' item has waited {waited} min "
+                      f"(limit {timeout} min) \u2014 escalated to {target}"
+                      + (" (second escalation: limit breached twice over)." if level == 2 else "."),
         }
 
     return {
-        "should_escalate": False,
-        "reason": f"Still within the {timeout}-minute window for '{urgency}' items.",
+        **base, "should_escalate": False, "level": 0, "escalate_to": None,
+        "reason": f"Within the {timeout}-minute window for '{urgency}' items ({timeout - waited} min left).",
     }
 
 

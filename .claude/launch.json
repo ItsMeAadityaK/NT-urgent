@@ -3,9 +3,10 @@
   "configurations": [
     {
       "name": "triage-server",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": "python3",
       "runtimeArgs": ["server.py"],
-      "port": 5000
+      "port": 5050,
+      "autoPort": true
     }
   ]
 }

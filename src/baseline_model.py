@@ -1,35 +1,39 @@
 """
 baseline_model.py
 
-Traditional ML baseline — TF-IDF + Logistic Regression.
+Traditional ML baseline — TF-IDF (unigrams + bigrams) + Logistic Regression.
 
-This exists to compare against the LLM classifier (classifier.py) for
-your report's "technical sophistication" section: does a lightweight,
-locally-trained model perform differently to an LLM, especially on
-dialect-varied or informal phrasing?
+Two jobs:
+  1. A comparison point for the LLM classifier (classifier.py): does a
+     lightweight, locally-trained model behave differently, especially on
+     informal phrasing?
+  2. A fallback that runs with no network. If the LLM is unavailable, the
+     triage pipeline degrades to baseline + safety net instead of stopping.
 
-Unlike the LLM classifier, this one needs to be TRAINED on labelled
-examples before it can predict anything. Right now it trains on a tiny
-hardcoded set just to prove the pipeline works — you'll retrain it on
-your real synthetic dataset once that exists.
+Evaluation is done honestly with 5-fold stratified cross-validation: every
+message gets a prediction from a model that never saw it during training
+("out-of-fold" predictions). Those are the predictions the dashboard shows
+for the dataset, so the LLM-vs-baseline comparison isn't flattered by the
+baseline having memorised the very messages it's being judged on. A final
+model fitted on everything is used only for brand-new text (the "Try a
+message" tab).
 
-Schema this function produces (matches data/messages.csv columns):
-    urgency_score : one of "low", "medium", "high", "critical"
-    model_source  : "baseline"
+class_weight="balanced" because the dataset is skewed toward low/medium
+(deliberately — that's the haystack), and without it the model under-
+predicts the rare critical class, which is the one that matters most.
 """
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.pipeline import make_pipeline
 
 URGENCY_LEVELS = ["low", "medium", "high", "critical"]
 
 # Tiny hardcoded fallback set — only used if this module is imported
 # without ever calling train_baseline_from_dataset() (e.g. running this
-# file directly, or an early test). The real app trains on the full
-# 152-message synthetic dataset via train_baseline_from_dataset(), called
-# from server.py at startup.
+# file directly). The app trains on the full dataset at startup.
 _TRAINING_MESSAGES = [
     "when does my permit renew",
     "just checking my application status",
@@ -40,7 +44,7 @@ _TRAINING_MESSAGES = [
     "no water for 3 days, community cut off by flooding, elderly residents",
     "roof gone in the storm, no where to stay tonight",
     "child alone at home, no contact from parent since yesterday, worried",
-    "fire near the community, evacuation may be needed",
+    "floodwater entering the house, cant get out",
 ]
 _TRAINING_LABELS = [
     "low", "low", "low", "low",
@@ -50,34 +54,38 @@ _TRAINING_LABELS = [
 ]
 
 
+def _new_pipeline():
+    return make_pipeline(
+        TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True),
+        LogisticRegression(max_iter=2000, class_weight="balanced"),
+    )
+
+
 class BaselineUrgencyModel:
     """Wraps the TF-IDF vectorizer + classifier as one trainable unit."""
 
     def __init__(self):
-        self.vectorizer = TfidfVectorizer()
-        self.model = LogisticRegression(max_iter=1000)
+        self.pipeline = _new_pipeline()
         self._is_trained = False
 
     def train(self, messages: list[str], labels: list[str]):
-        X = self.vectorizer.fit_transform(messages)
-        self.model.fit(X, labels)
+        self.pipeline.fit(messages, labels)
         self._is_trained = True
 
     def predict(self, message_text: str) -> dict:
         if not self._is_trained:
             raise RuntimeError("Model not trained yet — call .train() first.")
-
-        X = self.vectorizer.transform([message_text])
-        prediction = self.model.predict(X)[0]
-
+        probs = self.pipeline.predict_proba([message_text])[0]
+        classes = list(self.pipeline.classes_)
+        best = max(range(len(classes)), key=lambda i: probs[i])
         return {
-            "urgency_score": prediction,
+            "urgency_score": classes[best],
+            "confidence": float(probs[best]),
             "model_source": "baseline",
         }
 
 
-# Module-level singleton so other files can just import and use it
-# without worrying about training it themselves.
+# Module-level singleton so other files can just import and use it.
 _baseline = BaselineUrgencyModel()
 _baseline.train(_TRAINING_MESSAGES, _TRAINING_LABELS)
 
@@ -88,64 +96,47 @@ def classify_urgency_baseline(message_text: str) -> dict:
 
 
 def train_baseline_from_dataset(messages: list[str], true_labels: list[str],
-                                 test_size: float = 0.2, random_state: int = 42) -> dict:
+                                n_folds: int = 5, random_state: int = 42) -> dict:
     """
-    Proper train/test evaluation, then a final production fit.
-
-    Step 1: split the real dataset, train ONLY on the train split, and
-    measure accuracy against true_labels on the held-out test split —
-    this is what "the baseline is X% accurate" should actually mean,
-    rather than just eyeballing agreement with the LLM.
-
-    Step 2: once that honest number is captured, refit the module-level
-    singleton (used by classify_urgency_baseline everywhere else in the
-    app) on the FULL dataset, so the live predictions shown in the
-    dashboard benefit from every labelled example, not just 80% of them.
+    Cross-validated evaluation, then a final fit for new text.
 
     Returns:
-        dict: {"accuracy": float, "n_train": int, "n_test": int,
-               "n_total": int, "misclassified": list of
-               {"text", "true_label", "predicted"} for the test-split
-               errors — useful for the report's error-analysis section}
+        dict: {"accuracy", "n_total", "n_folds",
+               "oof_predictions": list[str] aligned with `messages`,
+               "per_class_recall": {level: float},
+               "misclassified": [{"text", "true_label", "predicted"}]}
     """
-    X_train, X_test, y_train, y_test = train_test_split(
-        messages, true_labels, test_size=test_size, random_state=random_state,
-        stratify=true_labels,
-    )
+    cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_state)
+    oof = list(cross_val_predict(_new_pipeline(), messages, true_labels, cv=cv))
 
-    eval_model = BaselineUrgencyModel()
-    eval_model.train(X_train, y_train)
-
-    predictions = [eval_model.predict(text)["urgency_score"] for text in X_test]
-    accuracy = accuracy_score(y_test, predictions)
+    per_class_recall = {}
+    for level in URGENCY_LEVELS:
+        idx = [i for i, t in enumerate(true_labels) if t == level]
+        if idx:
+            per_class_recall[level] = sum(oof[i] == level for i in idx) / len(idx)
 
     misclassified = [
-        {"text": text, "true_label": true, "predicted": pred}
-        for text, true, pred in zip(X_test, y_test, predictions)
-        if true != pred
+        {"text": t, "true_label": y, "predicted": p}
+        for t, y, p in zip(messages, true_labels, oof) if y != p
     ]
 
-    # Final production fit on everything, for live use in the app.
+    # Final fit on everything — used only for text the model has never seen.
     _baseline.train(messages, true_labels)
 
     return {
-        "accuracy": accuracy,
-        "n_train": len(X_train),
-        "n_test": len(X_test),
+        "accuracy": accuracy_score(true_labels, oof),
         "n_total": len(messages),
+        "n_folds": n_folds,
+        "oof_predictions": oof,
+        "per_class_recall": per_class_recall,
         "misclassified": misclassified,
     }
 
 
 if __name__ == "__main__":
-    # Same test messages as classifier.py, so you can directly compare output.
-    test_messages = [
+    for msg in [
         "when does my permit renew? just checking the date",
         "no water for 3 days, community cut off by flooding, elderly residents affected",
         "can u help my roof gone in the storm last nite got no where to stay",
-    ]
-
-    for msg in test_messages:
-        result = classify_urgency_baseline(msg)
-        print(f"\nMessage: {msg}")
-        print(f"  -> {result}")
+    ]:
+        print(f"\nMessage: {msg}\n  -> {classify_urgency_baseline(msg)}")

@@ -1,7 +1,7 @@
 """
 messages.py
 
-Synthetic demo dataset for the correspondence triage dashboard: 150
+Synthetic demo dataset for the correspondence triage dashboard: 152
 messages simulating one high-volume wet-season shift for a generic NT
 government correspondence/complaints unit.
 
@@ -85,7 +85,8 @@ SAMPLE_MESSAGES = [
     _m("M001", 4, "sms", "S001",
        "no water 3 days now, community cut off by the flood, got old people here need help",
        "Daly River area", "cut-off", "critical",
-       "Immediate health/safety risk (prolonged lack of water) compounded by physical isolation and a vulnerable group (elderly residents)."),
+       "Immediate health/safety risk (prolonged lack of water) compounded by physical isolation and a vulnerable group (elderly residents).",
+       pair="FP1", style="informal"),
 
     _m("M002", 9, "webform", "S002",
        "Our household has been without a reliable water supply for three consecutive days due to flooding that has isolated our community. We have elderly residents present who require assistance.",
@@ -96,8 +97,7 @@ SAMPLE_MESSAGES = [
     _m("M003", 11, "sms", "S003",
        "no power no water baby is sick cant get to clinic road all flooded",
        "Peppimenarti", "cut-off", "critical",
-       "Sick infant combined with no access to medical care due to road flooding — direct, time-critical safety risk to a vulnerable dependent.",
-       pair="FP1", style="informal"),
+       "Sick infant combined with no access to medical care due to road flooding — direct, time-critical safety risk to a vulnerable dependent."),
 
     _m("M004", 15, "sms", "S004",
        "kid on their own since this morning no answer from mum worried something wrong",
@@ -112,7 +112,7 @@ SAMPLE_MESSAGES = [
 
     _m("M006", 44, "webform", "S006",
        "I have had no contact with my mother since this morning despite repeated attempts, and I am unable to travel to check on her welfare due to road closures.",
-       "Katherine", "limited", "critical",
+       "Daly River area", "cut-off", "critical",
        "Same underlying welfare-check emergency as M005, formally phrased: prolonged loss of contact with a vulnerable relative, reporter unable to attend in person.",
        pair="FP5", style="formal"),
 
@@ -367,7 +367,7 @@ SAMPLE_MESSAGES = [
        "Impending medication shortfall for a minor with a chronic condition — urgent, time-boxed before it becomes an emergency."),
 
     # ---------------------------------------------------------------
-    # MEDIUM (40) — ongoing issues affecting daily life, not danger
+    # MEDIUM (40, +1 follow-up below) — ongoing issues affecting daily life, not danger
     # ---------------------------------------------------------------
     _m("M056", 22, "sms", "S056",
        "power has been out for a few hours, generator on standby",
@@ -572,7 +572,7 @@ SAMPLE_MESSAGES = [
        "Routine administrative delay, unrelated to weather, no urgency indicators."),
 
     # ---------------------------------------------------------------
-    # LOW (55) — routine, no time pressure or risk indicators
+    # LOW (55, +1 follow-up below) — routine, no time pressure or risk indicators
     # ---------------------------------------------------------------
     _m("M096", 6, "email", "S096",
        "Hi, just wondering when my community grant application renews. No rush.",
