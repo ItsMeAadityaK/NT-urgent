@@ -10,43 +10,50 @@
 </head>
 <body>
 
-<header class="dispatch-header">
-  <div class="header-left">
-    <h1>Correspondence Triage <span class="build-tag">DISPATCH CONSOLE</span></h1>
-    <p class="subtitle">Wet-season correspondence unit. Every message is classified, routed and given a
-    plain-English reason. Anything serious goes to a named human, and escalates again if nobody picks it up.
-    <strong>The system never replies to the public by itself.</strong></p>
-  </div>
+<div class="masthead">
+  <div class="masthead-inner">
+    <header class="dispatch-header">
+      <div class="header-left">
+        <div class="brand"><span class="brand-mark" aria-hidden="true"></span>NT CORRESPONDENCE TRIAGE</div>
+        <h1>Every urgent message reaches a person. <span class="build-tag">Fast.</span></h1>
+        <p class="subtitle">Wet-season correspondence unit — every message is classified, routed and given a
+        plain-English reason. Anything serious goes to a named human, and escalates again if nobody picks it up.
+        <strong>The system never replies to the public by itself.</strong></p>
+      </div>
 
-  <div class="header-right">
-    <div class="clock-block">
-      <span class="label">SIM. TIME</span>
-      <div class="clock-value" id="clockValue">—:—</div>
-      <div class="clock-date" id="clockDate">—</div>
+      <div class="header-right">
+        <div class="clock-block">
+          <span class="label">SIM. TIME</span>
+          <div class="clock-value" id="clockValue">—:—</div>
+          <div class="clock-date" id="clockDate">—</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="control-bar">
+      <button id="playBtn" class="ctrl-btn" title="Auto-advance the clock">&#9654; PLAY</button>
+      <input type="range" id="clockSlider" min="0" max="480" step="15" value="30" aria-label="Simulation clock">
+      <span class="ctrl-readout" id="minutesReadout">+30 min</span>
+      <select id="speedSelect" class="ctrl-select" title="Auto-advance speed" aria-label="Speed">
+        <option value="900">1x</option>
+        <option value="450">2x</option>
+        <option value="150" selected>6x</option>
+      </select>
+      <button id="llmBtn" class="ctrl-btn llm-btn" title="Simulate the LLM being unavailable (API outage / no connectivity)">LLM: ONLINE</button>
+      <button id="resetBtn" class="ctrl-btn ghost" title="Clear all officer actions">RESET</button>
     </div>
+
+    <div id="degradedBanner" class="degraded-banner" hidden>
+      <strong>LLM OUTAGE (SIMULATED).</strong> Every item is being triaged in degraded mode: the local baseline
+      model plus deterministic safety tripwires plus access weighting. Items are marked "NOT LLM-CHECKED".
+      Urgent messages still reach a human; see the Evaluation tab for how many.
+    </div>
+
+    <section id="attention" class="attention"></section>
   </div>
-</header>
-
-<div class="control-bar">
-  <button id="playBtn" class="ctrl-btn" title="Auto-advance the clock">&#9654; PLAY</button>
-  <input type="range" id="clockSlider" min="0" max="480" step="15" value="30" aria-label="Simulation clock">
-  <span class="ctrl-readout" id="minutesReadout">+30 min</span>
-  <select id="speedSelect" class="ctrl-select" title="Auto-advance speed" aria-label="Speed">
-    <option value="900">1x</option>
-    <option value="450">2x</option>
-    <option value="150" selected>6x</option>
-  </select>
-  <button id="llmBtn" class="ctrl-btn llm-btn" title="Simulate the LLM being unavailable (API outage / no connectivity)">LLM: ONLINE</button>
-  <button id="resetBtn" class="ctrl-btn ghost" title="Clear all officer actions">RESET</button>
 </div>
 
-<div id="degradedBanner" class="degraded-banner" hidden>
-  <strong>LLM OUTAGE (SIMULATED).</strong> Every item is being triaged in degraded mode: the local baseline
-  model plus deterministic safety tripwires plus access weighting. Items are marked "NOT LLM-CHECKED".
-  Urgent messages still reach a human; see the Evaluation tab for how many.
-</div>
-
-<section id="attention" class="attention"></section>
+<div class="page-body">
 
 <section class="stat-row" id="statRow"></section>
 
@@ -61,12 +68,25 @@
 <main>
   <section id="view-queue" class="view active">
     <div class="queue-toolbar">
-      <button id="queueFilterOpen" class="chip">Open</button>
-      <button id="queueFilterAll" class="chip">All</button>
       <select id="teamFilter" class="ctrl-select" aria-label="Filter by team"></select>
       <span class="queue-meta" id="queueMeta"></span>
     </div>
-    <div id="queueList"></div>
+
+    <div class="queue-section">
+      <div class="queue-section-head">
+        <h4>Needs action <span class="section-count" id="openCount">0</span></h4>
+        <span class="view-note">Sorted by priority, then oldest first</span>
+      </div>
+      <div id="queueOpenList"></div>
+    </div>
+
+    <div class="queue-section acked-section">
+      <button class="queue-section-head toggle" id="ackToggle" aria-expanded="false">
+        <h4>Acknowledged <span class="section-count muted" id="ackCount">0</span></h4>
+        <span class="toggle-caret">&#9656;</span>
+      </button>
+      <div id="queueAckList" hidden></div>
+    </div>
   </section>
 
   <section id="view-map" class="view">
@@ -77,11 +97,11 @@
       <svg id="ntMap" viewBox="0 0 500 900" xmlns="http://www.w3.org/2000/svg"></svg>
       <div class="map-side">
         <div class="legend">
-          <div class="legend-row"><span class="dot" style="--c:#C1272D"></span>Critical</div>
-          <div class="legend-row"><span class="dot" style="--c:#C97A2B"></span>High</div>
-          <div class="legend-row"><span class="dot" style="--c:#A69422"></span>Medium</div>
-          <div class="legend-row"><span class="dot" style="--c:#3D6B63"></span>Low</div>
-          <div class="legend-row"><span class="dot" style="--c:#9C948A"></span>All acknowledged</div>
+          <div class="legend-row"><span class="dot" style="--c:#D7263D"></span>Critical</div>
+          <div class="legend-row"><span class="dot" style="--c:#E8590C"></span>High</div>
+          <div class="legend-row"><span class="dot" style="--c:#B8860B"></span>Medium</div>
+          <div class="legend-row"><span class="dot" style="--c:#2F9E5B"></span>Low</div>
+          <div class="legend-row"><span class="dot" style="--c:#8B8F98"></span>All acknowledged</div>
         </div>
         <div id="mapDetail" class="map-detail">Click a location pin to see its open messages.</div>
       </div>
@@ -133,6 +153,8 @@
     <div id="fairnessSummary"></div>
   </section>
 </main>
+
+</div><!-- /.page-body -->
 
 <script src="app.js"></script>
 </body>

@@ -1,8 +1,8 @@
 const URGENCY_COLOR = {
-  critical: "#C1272D",
-  high: "#C97A2B",
-  medium: "#A69422",
-  low: "#3D6B63",
+  critical: "#D7263D",
+  high: "#E8590C",
+  medium: "#B8860B",
+  low: "#2F9E5B",
 };
 const URGENCY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -49,8 +49,8 @@ const state = {
   playTimer: null,
   expanded: new Set(),
   activePin: null,
-  queueFilter: "open",
   teamFilter: "",
+  ackOpen: false,
   data: null,
 };
 
@@ -203,23 +203,32 @@ function renderQueue() {
   teamSel.innerHTML = `<option value="">All teams</option>` +
     teams.map((t) => `<option value="${escapeHtml(t)}" ${t === current ? "selected" : ""}>${escapeHtml(t)}</option>`).join("");
 
-  let msgs = all;
-  if (state.queueFilter === "open") msgs = msgs.filter((m) => !m.acknowledged);
-  if (state.teamFilter) msgs = msgs.filter((m) => m.team === state.teamFilter);
+  const filtered = state.teamFilter ? all.filter((m) => m.team === state.teamFilter) : all;
+  const open = filtered.filter((m) => !m.acknowledged);
+  const acked = filtered.filter((m) => m.acknowledged);
 
-  el("queueMeta").textContent = `${msgs.length} SHOWN · ${all.length} RECEIVED · SORTED: OPEN FIRST, THEN PRIORITY, THEN OLDEST`;
-  const list = el("queueList");
+  el("queueMeta").textContent = all.length
+    ? `${all.length} RECEIVED · ${open.length} NEED ACTION · ${acked.length} ACKNOWLEDGED`
+    : "";
 
+  el("openCount").textContent = open.length;
+  el("ackCount").textContent = acked.length;
+
+  const openList = el("queueOpenList");
   if (all.length === 0) {
-    list.innerHTML = `<p class="view-note">No messages have arrived yet — advance the clock.</p>`;
-    return;
-  }
-  if (msgs.length === 0) {
-    list.innerHTML = `<p class="view-note">Nothing matches this filter.</p>`;
-    return;
+    openList.innerHTML = `<p class="view-note">No messages have arrived yet — advance the clock.</p>`;
+  } else if (open.length === 0) {
+    openList.innerHTML = `<p class="view-note empty-good">Nothing waiting on an officer right now. Every open item has been picked up.</p>`;
+  } else {
+    openList.innerHTML = open.map(renderRow).join("");
   }
 
-  list.innerHTML = msgs.map(renderRow).join("");
+  const ackList = el("queueAckList");
+  ackList.innerHTML = acked.length
+    ? acked.map(renderRow).join("")
+    : `<p class="view-note">Nothing acknowledged yet.</p>`;
+
+  const list = el("view-queue");
   list.querySelectorAll("[data-toggle]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-toggle");
@@ -554,17 +563,16 @@ el("llmBtn").addEventListener("click", () => {
   state.llmOnline = !state.llmOnline;
   fetchState();
 });
-el("queueFilterOpen").addEventListener("click", () => { state.queueFilter = "open"; syncFilterButtons(); renderQueue(); });
-el("queueFilterAll").addEventListener("click", () => { state.queueFilter = "all"; syncFilterButtons(); renderQueue(); });
 el("teamFilter").addEventListener("change", (e) => { state.teamFilter = e.target.value; renderQueue(); });
 el("tryBtn").addEventListener("click", runTry);
 document.querySelectorAll(".tab-btn").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 
-function syncFilterButtons() {
-  el("queueFilterOpen").classList.toggle("active", state.queueFilter === "open");
-  el("queueFilterAll").classList.toggle("active", state.queueFilter === "all");
-}
+el("ackToggle").addEventListener("click", () => {
+  state.ackOpen = !state.ackOpen;
+  el("ackToggle").setAttribute("aria-expanded", String(state.ackOpen));
+  el("ackToggle").classList.toggle("open", state.ackOpen);
+  el("queueAckList").hidden = !state.ackOpen;
+});
 
 renderExamples();
-syncFilterButtons();
 fetchState();

@@ -137,7 +137,7 @@ def test_no_code_path_sends_messages():
     for folder in ("src", "."):
         for name in os.listdir(os.path.join(ROOT, folder)):
             if name.endswith(".py"):
-                src = open(os.path.join(ROOT, folder, name)).read()
+                src = open(os.path.join(ROOT, folder, name), encoding="utf-8").read()
                 for b in banned:
                     assert f"import {b}" not in src, f"{name} imports {b}"
 
