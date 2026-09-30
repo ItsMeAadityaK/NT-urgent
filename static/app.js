@@ -50,6 +50,7 @@ const state = {
   expanded: new Set(),
   activePin: null,
   teamFilter: "",
+  priorityFilter: "",
   ackOpen: false,
   data: null,
 };
@@ -145,12 +146,16 @@ function renderAttention() {
       <p class="view-note">Nothing is waiting past its limit. Every urgent item has been picked up by an officer.</p>`;
     return;
   }
-  const shown = items.slice(0, 6);
+  // Every item is listed in a scrollable box. The panel re-renders on each
+  // clock tick and action, so keep the officer's scroll position across renders.
+  const prevList = panel.querySelector(".attention-list");
+  const prevScroll = prevList ? prevList.scrollTop : 0;
   panel.className = "attention";
   panel.innerHTML = `
     <div class="attention-title">NEEDS A HUMAN NOW <span class="count">${items.length}</span>
       <span class="attention-sub">auto-escalated past their limit, or senders who went quiet — the system never replies itself, it only escalates to people</span></div>
-    ${shown.map((m) => `
+    <div class="attention-list" tabindex="0" aria-label="Items needing a human">
+    ${items.map((m) => `
       <div class="attention-row" style="--row-color:${URGENCY_COLOR[m.access_adjusted_priority]}">
         <span class="mono">${m.message_id}</span>
         ${tag(m.access_adjusted_priority)}
@@ -164,7 +169,9 @@ function renderAttention() {
           ${m.dropout_flag ? `<button class="ack-btn warn" data-welfare="${escapeHtml(m.sender_id)}">LOG WELFARE CHECK</button>` : ""}
         </span>
       </div>`).join("")}
-    ${items.length > shown.length ? `<p class="view-note">+ ${items.length - shown.length} more in the queue below.</p>` : ""}`;
+    </div>
+    ${items.length > 6 ? `<p class="view-note attention-hint">Showing all ${items.length} \u2014 scroll the list to see more.</p>` : ""}`;
+  panel.querySelector(".attention-list").scrollTop = prevScroll;
   bindActions(panel);
 }
 
@@ -203,7 +210,11 @@ function renderQueue() {
   teamSel.innerHTML = `<option value="">All teams</option>` +
     teams.map((t) => `<option value="${escapeHtml(t)}" ${t === current ? "selected" : ""}>${escapeHtml(t)}</option>`).join("");
 
-  const filtered = state.teamFilter ? all.filter((m) => m.team === state.teamFilter) : all;
+  const byTeam = state.teamFilter ? all.filter((m) => m.team === state.teamFilter) : all;
+  renderPriorityFilter(byTeam);
+  const filtered = state.priorityFilter
+    ? byTeam.filter((m) => m.access_adjusted_priority === state.priorityFilter)
+    : byTeam;
   const open = filtered.filter((m) => !m.acknowledged);
   const acked = filtered.filter((m) => m.acknowledged);
 
@@ -218,7 +229,9 @@ function renderQueue() {
   if (all.length === 0) {
     openList.innerHTML = `<p class="view-note">No messages have arrived yet — advance the clock.</p>`;
   } else if (open.length === 0) {
-    openList.innerHTML = `<p class="view-note empty-good">Nothing waiting on an officer right now. Every open item has been picked up.</p>`;
+    openList.innerHTML = state.priorityFilter
+      ? `<p class="view-note empty-good">No open ${state.priorityFilter} items right now.</p>`
+      : `<p class="view-note empty-good">Nothing waiting on an officer right now. Every open item has been picked up.</p>`;
   } else {
     openList.innerHTML = open.map(renderRow).join("");
   }
@@ -238,6 +251,23 @@ function renderQueue() {
     });
   });
   bindActions(list);
+}
+
+// Priority chips: the queue is sorted most-urgent first, so late in the shift
+// dozens of critical rows sit above everything else. These jump straight to a band.
+function renderPriorityFilter(msgs) {
+  const openCount = (p) => msgs.filter((m) => !m.acknowledged && (!p || m.access_adjusted_priority === p)).length;
+  const options = [["", "All"], ["critical", "Critical"], ["high", "High"], ["medium", "Medium"], ["low", "Low"]];
+  const box = el("priorityFilter");
+  box.innerHTML = options.map(([p, label]) => `
+    <button class="chip prio-chip ${state.priorityFilter === p ? "active" : ""}" data-prio="${p}"
+      ${p ? `style="--chip-color:${URGENCY_COLOR[p]}"` : ""} aria-pressed="${state.priorityFilter === p}">
+      ${p ? `<span class="chip-dot"></span>` : ""}${label} <span class="chip-count">${openCount(p)}</span>
+    </button>`).join("");
+  box.querySelectorAll("[data-prio]").forEach((b) => b.addEventListener("click", () => {
+    state.priorityFilter = b.dataset.prio;
+    renderQueue();
+  }));
 }
 
 function renderRow(m) {

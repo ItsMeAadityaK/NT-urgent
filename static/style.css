@@ -234,6 +234,15 @@ html, body {
   font-size: 0.86rem;
   color: var(--mh-text);
 }
+.attention-list {
+  max-height: 390px;            /* roughly six rows; the rest scroll */
+  overflow-y: auto;
+  overscroll-behavior: contain; /* scrolling the list doesn't scroll the page */
+  scrollbar-width: thin;
+  scrollbar-color: var(--mh-muted) transparent;
+}
+.attention-list:focus-visible { outline: 2px solid var(--mh-muted); outline-offset: 2px; }
+.attention-hint { margin: 10px 0 0; }
 .attention-row .mono { font-size: 0.76rem; color: var(--mh-muted); }
 .attention-meta { font-size: 0.7rem; color: var(--mh-muted); line-height: 1.5; }
 .attention-actions { text-align: right; }
@@ -576,6 +585,12 @@ html, body {
 }
 .chip:hover { color: var(--ink); border-color: var(--ink-faint); }
 .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.priority-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+.prio-chip { display: inline-flex; align-items: center; gap: 6px; }
+.prio-chip .chip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--chip-color); }
+.prio-chip .chip-count { opacity: 0.7; }
+.prio-chip.active { background: var(--ink); color: var(--card); border-color: var(--ink); }
+.prio-chip.active .chip-count { opacity: 1; }
 
 /* ---------- Try a message ---------- */
 #tryText {
@@ -637,6 +652,7 @@ html, body {
   .dispatch-row { grid-template-columns: 1fr; }
   .rowtags { text-align: left; }
   .attention-row { grid-template-columns: 1fr; gap: 6px; }
+  .attention-list { max-height: 60vh; }
   .attention-actions { text-align: left; }
   .detail-grid { grid-template-columns: 1fr; }
   .control-bar { flex-wrap: wrap; }
