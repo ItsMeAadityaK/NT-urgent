@@ -275,6 +275,12 @@ def _llm_flag(value) -> bool:
     return str(value).lower() not in ("off", "false", "0")
 
 
+def _record(store: dict, key: str, minute: int):
+    """Record when an officer action happened. Keep the EARLIEST time: if the demo
+    clock was scrubbed back and the action repeated earlier, the earlier one stands."""
+    store[key] = min(store.get(key, minute), minute)
+
+
 def _state_from_body(body):
     return jsonify(_build_state(_minutes(body.get("minutes")), _llm_flag(body.get("llm", "on"))))
 
@@ -289,7 +295,7 @@ def api_acknowledge():
     body = _body()
     if not body.get("message_id"):
         return jsonify({"error": "message_id required"}), 400
-    _acks.setdefault(body["message_id"], _minutes(body.get("minutes")))
+    _record(_acks, body["message_id"], _minutes(body.get("minutes")))
     return _state_from_body(body)
 
 
@@ -299,8 +305,8 @@ def api_approve_draft():
     if not body.get("message_id"):
         return jsonify({"error": "message_id required"}), 400
     minute = _minutes(body.get("minutes"))
-    _draft_approvals.setdefault(body["message_id"], minute)
-    _acks.setdefault(body["message_id"], minute)  # approving a reply implies the officer has it
+    _record(_draft_approvals, body["message_id"], minute)
+    _record(_acks, body["message_id"], minute)  # approving a reply implies the officer has it
     return _state_from_body(body)
 
 
@@ -309,7 +315,7 @@ def api_welfare_check():
     body = _body()
     if not body.get("sender_id"):
         return jsonify({"error": "sender_id required"}), 400
-    _welfare_checks.setdefault(body["sender_id"], _minutes(body.get("minutes")))
+    _record(_welfare_checks, body["sender_id"], _minutes(body.get("minutes")))
     return _state_from_body(body)
 
 

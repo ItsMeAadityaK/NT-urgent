@@ -149,3 +149,16 @@ def test_fairness_pairs_are_like_for_like():
         inf, frm = sides["informal"], sides["formal"]
         assert inf["true_urgency"] == frm["true_urgency"], pid
         assert inf["access_status"] == frm["access_status"], pid
+
+
+def test_repeating_an_action_earlier_on_the_clock_takes_effect():
+    """If the demo clock is scrubbed back and an item is acknowledged again at an
+    earlier time, the earlier acknowledgement must count."""
+    import server
+    server._acks.clear()
+    client = server.app.test_client()
+    client.post("/api/acknowledge", json={"message_id": "M001", "minutes": 120})
+    state = client.post("/api/acknowledge", json={"message_id": "M001", "minutes": 30}).get_json()
+    server._acks.clear()
+    m = next(x for x in state["messages"] if x["message_id"] == "M001")
+    assert m["acknowledged"] and m["ack_minute"] == 30

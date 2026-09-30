@@ -319,6 +319,17 @@ html, body {
 .tab-btn:hover { color: var(--ink); }
 .tab-btn.active { color: var(--accent-ink); background: var(--accent); }
 
+.tab-count {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  text-align: center;
+  background: var(--low);
+  color: #fff;
+}
 .view { display: none; }
 .view.active { display: block; }
 .view-note { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.5; }
@@ -364,7 +375,7 @@ html, body {
 }
 .toggle-caret { color: var(--ink-faint); transition: transform 0.15s; margin-left: 2px; }
 .acked-section .toggle.open .toggle-caret { transform: rotate(90deg); }
-#queueAckList { opacity: 0.85; }
+#ackedList { opacity: 0.9; }
 
 /* ---------- Message cards ---------- */
 .dispatch-row {

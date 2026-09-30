@@ -63,6 +63,7 @@
   <button class="tab-btn" data-view="try">Try a Message</button>
   <button class="tab-btn" data-view="compare">Evaluation</button>
   <button class="tab-btn" data-view="fairness">Fairness Audit</button>
+  <button class="tab-btn" data-view="acked">Acknowledged <span class="tab-count" id="ackTabCount">0</span></button>
 </nav>
 
 <main>
@@ -81,13 +82,16 @@
       <div id="queueOpenList"></div>
     </div>
 
-    <div class="queue-section acked-section">
-      <button class="queue-section-head toggle" id="ackToggle" aria-expanded="false">
-        <h4>Acknowledged <span class="section-count muted" id="ackCount">0</span></h4>
-        <span class="toggle-caret">&#9656;</span>
-      </button>
-      <div id="queueAckList" hidden></div>
+  </section>
+
+  <section id="view-acked" class="view">
+    <div class="queue-section-head">
+      <h4>Acknowledged by an officer <span class="section-count muted" id="ackCount">0</span></h4>
+      <span class="view-note">Most recently acknowledged first</span>
     </div>
+    <p class="view-note">Items an officer has picked up. They've stopped escalating, but the full reasoning and
+    draft reply are still here, and drafts can still be approved.</p>
+    <div id="ackedList"></div>
   </section>
 
   <section id="view-map" class="view">

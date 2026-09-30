@@ -51,7 +51,6 @@ const state = {
   activePin: null,
   teamFilter: "",
   priorityFilter: "",
-  ackOpen: false,
   data: null,
 };
 
@@ -120,6 +119,8 @@ function render() {
   if (state.view === "map") renderMap();
   if (state.view === "compare") renderCompare();
   if (state.view === "fairness") renderFairness();
+  if (state.view === "acked") renderAcked();
+  el("ackTabCount").textContent = state.data.messages.filter((m) => m.acknowledged).length;
 }
 
 // ---------- LLM status ----------
@@ -223,7 +224,6 @@ function renderQueue() {
     : "";
 
   el("openCount").textContent = open.length;
-  el("ackCount").textContent = acked.length;
 
   const openList = el("queueOpenList");
   if (all.length === 0) {
@@ -236,21 +236,34 @@ function renderQueue() {
     openList.innerHTML = open.map(renderRow).join("");
   }
 
-  const ackList = el("queueAckList");
-  ackList.innerHTML = acked.length
-    ? acked.map(renderRow).join("")
-    : `<p class="view-note">Nothing acknowledged yet.</p>`;
+  bindRows(el("view-queue"));
+}
 
-  const list = el("view-queue");
-  list.querySelectorAll("[data-toggle]").forEach((btn) => {
+// ---------- Acknowledged ----------
+// Its own tab so officers don't have to scroll past the whole open queue
+// to find items they've already picked up.
+function renderAcked() {
+  const acked = state.data.messages
+    .filter((m) => m.acknowledged)
+    .sort((a, b) => b.ack_minute - a.ack_minute ||
+      URGENCY_ORDER[a.access_adjusted_priority] - URGENCY_ORDER[b.access_adjusted_priority]);
+  el("ackCount").textContent = acked.length;
+  el("ackedList").innerHTML = acked.length
+    ? acked.map(renderRow).join("")
+    : `<p class="view-note">Nothing acknowledged yet. Press ACKNOWLEDGE on an item in the queue and it moves here.</p>`;
+  bindRows(el("view-acked"));
+}
+
+function bindRows(root) {
+  root.querySelectorAll("[data-toggle]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-toggle");
       if (state.expanded.has(id)) state.expanded.delete(id);
       else state.expanded.add(id);
-      renderQueue();
+      render();
     });
   });
-  bindActions(list);
+  bindActions(root);
 }
 
 // Priority chips: the queue is sorted most-urgent first, so late in the shift
@@ -597,12 +610,6 @@ el("teamFilter").addEventListener("change", (e) => { state.teamFilter = e.target
 el("tryBtn").addEventListener("click", runTry);
 document.querySelectorAll(".tab-btn").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 
-el("ackToggle").addEventListener("click", () => {
-  state.ackOpen = !state.ackOpen;
-  el("ackToggle").setAttribute("aria-expanded", String(state.ackOpen));
-  el("ackToggle").classList.toggle("open", state.ackOpen);
-  el("queueAckList").hidden = !state.ackOpen;
-});
 
 renderExamples();
 fetchState();
