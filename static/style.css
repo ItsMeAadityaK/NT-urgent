@@ -629,6 +629,28 @@ html, body {
 .try-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 .try-card dt { color: var(--ink); font-weight: 600; margin-top: 6px; }
 .try-card dd { margin: 2px 0 0; color: var(--ink-soft); }
+.try-footer {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--card-border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.try-footer .view-note { flex: 1; min-width: 200px; }
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--teal);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  font-family: inherit;
+}
+.link-btn:hover { color: var(--accent); }
 
 /* ---------- Evaluation ---------- */
 .source-note {

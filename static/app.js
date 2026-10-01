@@ -99,6 +99,11 @@ async function approveDraft(id) {
 async function logWelfare(senderId) {
   applyState(await api("/api/welfare_check", { sender_id: senderId, ...common() }));
 }
+async function submitToQueue(payload) {
+  const r = await api("/api/submit", { ...payload, ...common() });
+  applyState(r);
+  return r.submitted_id;
+}
 async function resetAcks() {
   applyState(await api("/api/reset", common()));
 }
@@ -379,7 +384,7 @@ function renderCompare() {
     column is the price paid for that (officer time). Baseline per-class recall:
     ${Object.entries(state.data.evaluation.baseline_per_class_recall).map(([k, v]) => `${k} ${pct(v)}`).join(" · ")}.</p>`;
 
-  const msgs = state.data.messages;
+  const msgs = state.data.messages.filter((m) => m.true_urgency != null);
   let disagree = 0;
   const rows = msgs.map((m) => {
     const llm = m.llm_urgency || "—";
@@ -524,10 +529,10 @@ function renderExamples() {
 async function runTry() {
   const text = el("tryText").value.trim();
   if (!text) return;
+  const access = el("tryAccess").value;
+  const channel = el("tryChannel").value;
   el("tryResult").innerHTML = `<p class="view-note">Triaging…</p>`;
-  const r = await api("/api/classify", {
-    text, access_status: el("tryAccess").value, channel: el("tryChannel").value, llm: state.llmOnline ? "on" : "off",
-  });
+  const r = await api("/api/classify", { text, access_status: access, channel, llm: state.llmOnline ? "on" : "off" });
   if (r.error) {
     el("tryResult").innerHTML = `<p class="disagree">${escapeHtml(r.error)}</p>`;
     return;
@@ -550,7 +555,26 @@ async function runTry() {
         <div class="draft-text">${escapeHtml(r.draft.draft)}</div>
         <p class="draft-note">${escapeHtml(r.draft.officer_note)}</p>
       </div>
+      <div class="try-footer">
+        <button id="addToQueueBtn" class="ctrl-btn">+ ADD TO QUEUE</button>
+        <span class="view-note">This is just a preview above — nothing's saved until you add it. It won't affect the Evaluation/Fairness numbers (those are measured on the fixed 152-message set only).</span>
+      </div>
     </div>`;
+
+  el("addToQueueBtn").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = "ADDING…";
+    const mid = await submitToQueue({ text, access_status: access, channel });
+    e.target.textContent = `ADDED AS ${mid}`;
+    const note = document.createElement("p");
+    note.className = "view-note empty-good";
+    note.innerHTML = `Added to the live queue as <strong>${mid}</strong> — <button class="link-btn" id="goToQueueBtn">view it in Message Queue</button>.`;
+    e.target.closest(".try-footer").appendChild(note);
+    el("goToQueueBtn").addEventListener("click", () => {
+      state.expanded.add(mid);
+      setView("queue");
+    });
+  });
 }
 
 // ---------- Controls ----------

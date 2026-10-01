@@ -68,6 +68,16 @@ _acks = {}             # message_id -> minute acknowledged
 _draft_approvals = {}  # message_id -> minute approved
 _welfare_checks = {}   # sender_id  -> minute a welfare check was logged
 
+# Messages added live from the "Try a Message" tab via "Add to queue".
+# Kept separate from _MESSAGES (the fixed, reproducible 152-message
+# dataset the evaluation numbers are measured against) so trying things
+# live can never change the headline accuracy/recall figures. Each one
+# is triaged once, for both LLM-online and LLM-outage, same as the
+# startup dataset below.
+_submitted = []
+_submitted_static = {True: {}, False: {}}
+_submit_counter = [0]
+
 # ---------------------------------------------------------------------------
 # Static, clock-independent work done once at startup.
 # ---------------------------------------------------------------------------
@@ -100,11 +110,34 @@ def _triage(msg: dict, llm_online: bool) -> dict:
     llm = _LLM_RESULTS.get(msg["message_id"]) if llm_online else {"ok": False, "error": "simulated LLM outage"}
     if llm is None:
         llm = {"ok": False, "error": "no cached LLM result for this message"}
-    decision = decide_priority(msg["raw_text"], msg["access_status"], llm, _BASELINE_OOF[msg["message_id"]])
+    return _finish_triage(msg, llm)
+
+
+def _finish_triage(msg: dict, llm: dict) -> dict:
+    # _BASELINE_OOF only has entries for the fixed 152-message dataset (those are
+    # out-of-fold cross-validated predictions). A message typed into "Try a
+    # Message" isn't in that dataset, so it gets a normal (in-sample) prediction
+    # from the production model instead — still real, just not cross-validated.
+    baseline = _BASELINE_OOF.get(msg["message_id"])
+    if baseline is None:
+        baseline = classify_urgency_baseline(msg["raw_text"])["urgency_score"]
+    decision = decide_priority(msg["raw_text"], msg["access_status"], llm, baseline)
     route = route_message(msg["raw_text"], decision["access_adjusted_priority"])
     draft = draft_acknowledgement(msg["message_id"], decision["access_adjusted_priority"],
                                   route["category"], route["team"], msg["channel"])
-    return {"llm": llm, "decision": decision, "route": route, "draft": draft}
+    return {"llm": llm, "decision": decision, "route": route, "draft": draft, "baseline_urgency": baseline}
+
+
+def _triage_submitted(msg: dict, llm_online: bool) -> dict:
+    """Same resolution rule as /api/classify: a real call if a key is configured
+    and we're not simulating an outage, otherwise an honest 'unavailable'."""
+    if not llm_online:
+        llm = {"ok": False, "error": "simulated LLM outage"}
+    elif llm_configured():
+        llm = classify_urgency(msg["raw_text"])
+    else:
+        llm = {"ok": False, "error": "no API key configured on this server"}
+    return _finish_triage(msg, llm)
 
 
 _STATIC = {mode: {m["message_id"]: _triage(m, mode) for m in _MESSAGES} for mode in (True, False)}
@@ -147,8 +180,9 @@ def _arrival_minute(msg) -> int:
 def _build_state(minutes_elapsed: int, llm_online: bool):
     minutes_elapsed = max(0, min(SIM_MAX_MINUTES, minutes_elapsed))
     current_time = SIMULATION_START + timedelta(minutes=minutes_elapsed)
-    static = _STATIC[llm_online]
-    arrived = [m for m in _MESSAGES if m["timestamp"] <= current_time]
+    static = {**_STATIC[llm_online], **_submitted_static[llm_online]}
+    all_messages = _MESSAGES + _submitted
+    arrived = [m for m in all_messages if m["timestamp"] <= current_time]
 
     # Sender histories for dropout detection, using the triaged content
     # urgency (content + safety floor) as the detector's urgency_score.
@@ -196,7 +230,7 @@ def _build_state(minutes_elapsed: int, llm_online: bool):
             "true_urgency": msg["true_urgency"],
             "llm_urgency": llm.get("urgency_score") if llm.get("ok") else None,
             "llm_reason": llm.get("flag_reason") if llm.get("ok") else llm.get("error"),
-            "baseline_urgency": _BASELINE_OOF[mid],
+            "baseline_urgency": s["baseline_urgency"],
             "content_urgency": decision["content_urgency"],
             "content_source": decision["content_source"],
             "safety_floor": decision["safety_floor"],
@@ -324,6 +358,9 @@ def api_reset():
     _acks.clear()
     _draft_approvals.clear()
     _welfare_checks.clear()
+    _submitted.clear()
+    _submitted_static[True].clear()
+    _submitted_static[False].clear()
     return _state_from_body(_body())
 
 
@@ -365,6 +402,41 @@ def api_classify():
         "draft": draft,
         "sla_minutes": timeout,
     })
+
+
+@app.post("/api/submit")
+def api_submit():
+    """'Add to queue' from the 'Try a message' tab — same text just triaged
+    by /api/classify, now actually saved as a live item at the current sim
+    minute. Kept separate from _MESSAGES: it never touches the 152-message
+    evaluation/fairness dataset, so trying things live can't move those numbers."""
+    body = _body()
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    minute = _minutes(body.get("minutes"))
+
+    _submit_counter[0] += 1
+    mid = f"NEW{_submit_counter[0]:03d}"
+    msg = {
+        "message_id": mid,
+        "timestamp": SIMULATION_START + timedelta(minutes=minute),
+        "channel": body.get("channel", "sms"),
+        "sender_id": f"try-a-message-{mid}",
+        "raw_text": text,
+        "location": "Submitted live (Try a Message)",
+        "access_status": body.get("access_status", "normal"),
+        "true_urgency": None,
+        "fairness_pair": None,
+        "fairness_style": None,
+    }
+    _submitted.append(msg)
+    for mode in (True, False):
+        _submitted_static[mode][mid] = _triage_submitted(msg, mode)
+
+    state = _build_state(minute, _llm_flag(body.get("llm", "on")))
+    state["submitted_id"] = mid
+    return jsonify(state)
 
 
 @app.get("/")
