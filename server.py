@@ -66,7 +66,10 @@ app = Flask(__name__, static_folder="static", static_url_path="")
 # ---------------------------------------------------------------------------
 _acks = {}             # message_id -> minute acknowledged
 _draft_approvals = {}  # message_id -> minute approved
-_welfare_checks = {}   # sender_id  -> minute a welfare check was logged
+_welfare_checks = {}   # sender_id  -> {"minute", "logged_by", "note"} for a logged welfare check
+
+# Who can log a welfare check. Recorded so the log shows who took responsibility.
+WELFARE_ROLES = ("Officer", "Shift supervisor", "Duty manager")
 
 # Messages added live from the "Try a Message" tab via "Add to queue".
 # Kept separate from _MESSAGES (the fixed, reproducible 152-message
@@ -170,6 +173,40 @@ def _evaluation():
 _EVALUATION = _evaluation()
 
 
+def _welfare_log(arrived: list, static: dict, minutes_elapsed: int) -> list:
+    """Welfare checks logged so far on the sim clock, newest first. Each entry says
+    which message triggered it, who logged it, and whether the sender has made
+    contact again since (the best evidence they're OK)."""
+    by_sender = {}
+    for m in sorted(arrived, key=lambda m: m["timestamp"]):
+        by_sender.setdefault(m["sender_id"], []).append(m)
+
+    log = []
+    for sender_id, check in _welfare_checks.items():
+        if check["minute"] > minutes_elapsed or sender_id not in by_sender:
+            continue
+        msgs = by_sender[sender_id]
+        before = [m for m in msgs if _arrival_minute(m) <= check["minute"]] or msgs[:1]
+        after = [m for m in msgs if _arrival_minute(m) > check["minute"]]
+        trigger = before[-1]
+        log.append({
+            "sender_id": sender_id,
+            "minute": check["minute"],
+            "time": (SIMULATION_START + timedelta(minutes=check["minute"])).isoformat(),
+            "logged_by": check["logged_by"],
+            "note": check["note"],
+            "message_id": trigger["message_id"],
+            "raw_text": trigger["raw_text"],
+            "location": trigger["location"],
+            "access_status": trigger["access_status"],
+            "priority": static[trigger["message_id"]]["decision"]["access_adjusted_priority"],
+            "silent_minutes": check["minute"] - _arrival_minute(trigger),
+            "followup": ({"message_id": after[0]["message_id"], "time": after[0]["timestamp"].isoformat(),
+                          "raw_text": after[0]["raw_text"]} if after else None),
+        })
+    return sorted(log, key=lambda e: -e["minute"])
+
+
 def _arrival_minute(msg) -> int:
     return int((msg["timestamp"] - SIMULATION_START).total_seconds() // 60)
 
@@ -212,7 +249,7 @@ def _build_state(minutes_elapsed: int, llm_online: bool):
 
         dropout = check_dropout(histories[msg["sender_id"]], current_time)
         is_latest = histories[msg["sender_id"]][-1]["timestamp"] == msg["timestamp"]
-        welfare_minute = _welfare_checks.get(msg["sender_id"])
+        welfare_minute = (_welfare_checks.get(msg["sender_id"]) or {}).get("minute")
         welfare_logged = welfare_minute is not None and welfare_minute <= minutes_elapsed
         # Show the dropout flag once per sender (on their latest message) and
         # clear it once an officer logs a welfare check.
@@ -278,6 +315,7 @@ def _build_state(minutes_elapsed: int, llm_online: bool):
     time_to_human = {p: {"median": statistics.median(v), "n": len(v)} for p, v in tth.items()}
 
     return {
+        "welfare_log": _welfare_log(arrived, static, minutes_elapsed),
         "current_time": current_time.isoformat(),
         "minutes_elapsed": minutes_elapsed,
         "sim_max_minutes": SIM_MAX_MINUTES,
@@ -349,7 +387,14 @@ def api_welfare_check():
     body = _body()
     if not body.get("sender_id"):
         return jsonify({"error": "sender_id required"}), 400
-    _record(_welfare_checks, body["sender_id"], _minutes(body.get("minutes")))
+    minute = _minutes(body.get("minutes"))
+    logged_by = body.get("logged_by") if body.get("logged_by") in WELFARE_ROLES else "Officer"
+    note = str(body.get("note") or "").strip()[:300]
+    existing = _welfare_checks.get(body["sender_id"])
+    # Keep the earliest check (same rule as acknowledgements: scrubbing the demo
+    # clock back and logging again earlier replaces the later record).
+    if existing is None or minute < existing["minute"]:
+        _welfare_checks[body["sender_id"]] = {"minute": minute, "logged_by": logged_by, "note": note}
     return _state_from_body(body)
 
 

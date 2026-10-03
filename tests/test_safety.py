@@ -162,3 +162,32 @@ def test_repeating_an_action_earlier_on_the_clock_takes_effect():
     server._acks.clear()
     m = next(x for x in state["messages"] if x["message_id"] == "M001")
     assert m["acknowledged"] and m["ack_minute"] == 30
+
+
+def test_welfare_check_is_logged_with_who_and_followup():
+    """A logged welfare check records who logged it and the triggering message, clears
+    the 'sender silent' flag, and later shows the sender's follow-up as evidence they're OK."""
+    import server
+    server._welfare_checks.clear()
+    client = server.app.test_client()
+    state = client.post("/api/welfare_check", json={
+        "sender_id": "S003", "minutes": 150, "logged_by": "Shift supervisor", "note": "Patrol attending",
+    }).get_json()
+    entry = state["welfare_log"][0]
+    assert (entry["sender_id"], entry["message_id"], entry["logged_by"], entry["note"]) == \
+        ("S003", "M003", "Shift supervisor", "Patrol attending")
+    assert entry["followup"] is None
+    assert not any(m["dropout_flag"] for m in state["messages"] if m["sender_id"] == "S003")
+
+    later = client.get("/api/state?minutes=300").get_json()
+    assert later["welfare_log"][0]["followup"]["message_id"] == "M151"
+    server._welfare_checks.clear()
+
+
+def test_welfare_check_rejects_unknown_roles():
+    import server
+    server._welfare_checks.clear()
+    client = server.app.test_client()
+    state = client.post("/api/welfare_check", json={"sender_id": "S001", "minutes": 200, "logged_by": "Anyone"}).get_json()
+    server._welfare_checks.clear()
+    assert state["welfare_log"][0]["logged_by"] == "Officer"

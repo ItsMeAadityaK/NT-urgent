@@ -330,6 +330,56 @@ html, body {
   background: var(--low);
   color: #fff;
 }
+
+/* ---------- Welfare checks ---------- */
+.welfare-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-left: 4px solid var(--row-color);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.welfare-card.logged { opacity: 0.95; }
+.welfare-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.75rem; }
+.welfare-head .muted { color: var(--ink-faint); }
+.welfare-check { font-family: 'Space Mono', monospace; font-weight: 700; color: var(--low); }
+.role-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--card);
+}
+.welfare-note { font-size: 0.85rem; margin-top: 8px; color: var(--ink); }
+.welfare-followup { font-size: 0.82rem; margin-top: 8px; color: var(--high); }
+.welfare-followup.ok { color: var(--low); }
+.welfare-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px dashed var(--medium);
+  border-radius: var(--radius);
+  text-align: left;
+  font-size: 0.75rem;
+}
+.welfare-form label { display: flex; align-items: center; gap: 6px; }
+.welfare-form select, .welfare-form input {
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink);
+  min-width: 0;
+}
+.welfare-form-actions { display: flex; gap: 6px; }
+.welfare-form-actions .ack-btn { margin: 0; }
+.ack-btn.ghost { border-color: var(--card-border); color: var(--ink-soft); }
 .view { display: none; }
 .view.active { display: block; }
 .view-note { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.5; }

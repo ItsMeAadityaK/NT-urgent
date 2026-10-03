@@ -51,6 +51,8 @@ const state = {
   activePin: null,
   teamFilter: "",
   priorityFilter: "",
+  welfareForm: null,                                   // sender_id whose "log welfare check" form is open
+  welfareDraft: { logged_by: "Officer", note: "" },    // survives re-renders while the form is open
   data: null,
 };
 
@@ -97,7 +99,10 @@ async function approveDraft(id) {
   applyState(await api("/api/approve_draft", { message_id: id, ...common() }));
 }
 async function logWelfare(senderId) {
-  applyState(await api("/api/welfare_check", { sender_id: senderId, ...common() }));
+  const { logged_by, note } = state.welfareDraft;
+  state.welfareForm = null;
+  state.welfareDraft = { logged_by: "Officer", note: "" };
+  applyState(await api("/api/welfare_check", { sender_id: senderId, logged_by, note, ...common() }));
 }
 async function submitToQueue(payload) {
   const r = await api("/api/submit", { ...payload, ...common() });
@@ -125,7 +130,9 @@ function render() {
   if (state.view === "compare") renderCompare();
   if (state.view === "fairness") renderFairness();
   if (state.view === "acked") renderAcked();
+  if (state.view === "welfare") renderWelfare();
   el("ackTabCount").textContent = state.data.messages.filter((m) => m.acknowledged).length;
+  el("welfareTabCount").textContent = (state.data.welfare_log || []).length;
 }
 
 // ---------- LLM status ----------
@@ -172,7 +179,7 @@ function renderAttention() {
         </span>
         <span class="attention-actions">
           ${!m.acknowledged ? `<button class="ack-btn" data-ack="${m.message_id}">ACKNOWLEDGE</button>` : ""}
-          ${m.dropout_flag ? `<button class="ack-btn warn" data-welfare="${escapeHtml(m.sender_id)}">LOG WELFARE CHECK</button>` : ""}
+          ${m.dropout_flag ? welfareControl(m.sender_id) : ""}
         </span>
       </div>`).join("")}
     </div>
@@ -349,15 +356,80 @@ function renderRow(m) {
       <span class="team-tag">${escapeHtml(m.team)}${m.cc_duty_officer ? "<br>+ Duty Officer" : ""}</span>
       ${flags}
       <button class="ack-btn" data-ack="${m.message_id}" ${m.acknowledged ? "disabled" : ""}>${m.acknowledged ? "ACKNOWLEDGED" : "ACKNOWLEDGE"}</button>
-      ${m.dropout_flag ? `<button class="ack-btn warn" data-welfare="${escapeHtml(m.sender_id)}">LOG WELFARE CHECK</button>` : ""}
     </div>
   </div>`;
+}
+
+// ---------- Welfare checks ----------
+const WELFARE_ROLES = ["Officer", "Shift supervisor", "Duty manager"];
+
+// The LOG WELFARE CHECK button, or (once clicked) a small form recording who is
+// logging it and an optional note. Lives only in the "Needs a human now" panel.
+function welfareControl(senderId) {
+  const sid = escapeHtml(senderId);
+  if (state.welfareForm !== senderId) {
+    return `<button class="ack-btn warn" data-welfare-open="${sid}">LOG WELFARE CHECK</button>`;
+  }
+  const d = state.welfareDraft;
+  return `<div class="welfare-form">
+    <label>Logged by
+      <select data-wf-role>${WELFARE_ROLES.map((r) => `<option ${r === d.logged_by ? "selected" : ""}>${r}</option>`).join("")}</select>
+    </label>
+    <input data-wf-note maxlength="300" value="${escapeHtml(d.note)}" placeholder="Note (optional), e.g. police patrol asked to attend">
+    <div class="welfare-form-actions">
+      <button class="ack-btn warn" data-wf-save="${sid}">SAVE</button>
+      <button class="ack-btn ghost" data-wf-cancel>CANCEL</button>
+    </div>
+  </div>`;
+}
+
+// The Welfare Checks tab is a log of checks already made. Senders still awaiting a
+// check are shown (and actioned) in one place only: the "Needs a human now" panel.
+function renderWelfare() {
+  const log = state.data.welfare_log || [];
+  el("welfareLoggedCount").textContent = log.length;
+
+  el("welfareLogList").innerHTML = log.length
+    ? log.map((e) => `
+      <div class="welfare-card logged" style="--row-color:${URGENCY_COLOR[e.priority]}">
+        <div class="welfare-head">
+          <span class="welfare-check">&#10003; CHECKED ${fmtTime(e.time)}</span>
+          <span class="role-badge">${escapeHtml(e.logged_by)}</span>
+          ${tag(e.priority)}
+          <span class="mono">${e.message_id} \u00b7 ${escapeHtml(e.sender_id)}</span>
+          <span class="mono muted">${escapeHtml(e.location)}</span>
+        </div>
+        <div class="rowtext">&ldquo;${escapeHtml(e.raw_text)}&rdquo;</div>
+        <div class="why">Sender had been silent ${e.silent_minutes} min when the check was logged.</div>
+        ${e.note ? `<div class="welfare-note"><strong>Note:</strong> ${escapeHtml(e.note)}</div>` : ""}
+        ${e.followup
+          ? `<div class="welfare-followup ok">&#10003; Sender made contact again at ${fmtTime(e.followup.time)} (${e.followup.message_id}): &ldquo;${escapeHtml(e.followup.raw_text)}&rdquo;</div>`
+          : `<div class="welfare-followup">No contact from the sender since the check. Confirm the outcome with whoever attended.</div>`}
+      </div>`).join("")
+    : `<p class="view-note">No welfare checks logged yet. When a sender shows SENDER SILENT in "Needs a human now", press LOG WELFARE CHECK there.</p>`;
+
 }
 
 function bindActions(root) {
   root.querySelectorAll("[data-ack]").forEach((b) => b.addEventListener("click", () => acknowledge(b.dataset.ack)));
   root.querySelectorAll("[data-approve]").forEach((b) => b.addEventListener("click", () => approveDraft(b.dataset.approve)));
-  root.querySelectorAll("[data-welfare]").forEach((b) => b.addEventListener("click", () => logWelfare(b.dataset.welfare)));
+  root.querySelectorAll("[data-welfare-open]").forEach((b) => b.addEventListener("click", () => {
+    if (state.playing) togglePlay();  // stop the clock while the officer fills in the form
+    state.welfareForm = b.dataset.welfareOpen;
+    state.welfareDraft = { logged_by: "Officer", note: "" };
+    render();
+  }));
+  root.querySelectorAll("[data-wf-role]").forEach((sel) => sel.addEventListener("change", (e) => {
+    state.welfareDraft.logged_by = e.target.value;
+  }));
+  root.querySelectorAll("[data-wf-note]").forEach((inp) => inp.addEventListener("input", (e) => {
+    state.welfareDraft.note = e.target.value;
+  }));
+  root.querySelectorAll("[data-wf-save]").forEach((b) => b.addEventListener("click", () => logWelfare(b.dataset.wfSave)));
+  root.querySelectorAll("[data-wf-cancel]").forEach((b) => b.addEventListener("click", () => {
+    state.welfareForm = null;
+    render();
+  }));
 }
 
 // ---------- Evaluation / compare ----------

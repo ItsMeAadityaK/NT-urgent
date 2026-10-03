@@ -64,6 +64,7 @@
   <button class="tab-btn" data-view="compare">Evaluation</button>
   <button class="tab-btn" data-view="fairness">Fairness Audit</button>
   <button class="tab-btn" data-view="acked">Acknowledged <span class="tab-count" id="ackTabCount">0</span></button>
+  <button class="tab-btn" data-view="welfare">Welfare Checks <span class="tab-count" id="welfareTabCount">0</span></button>
 </nav>
 
 <main>
@@ -92,6 +93,21 @@
     <p class="view-note">Items an officer has picked up. They've stopped escalating, but the full reasoning and
     draft reply are still here, and drafts can still be approved.</p>
     <div id="ackedList"></div>
+  </section>
+
+  <section id="view-welfare" class="view">
+    <p class="view-note">When someone reports something serious and then goes silent, the silence itself is treated
+    as a warning sign: their phone may have died, the network may be down, or things may have got worse. Those senders
+    are flagged in "Needs a human now" at the top of the page, where an officer logs the welfare check. This tab is the
+    record of checks made: who logged each one, their note, and whether the sender has been in touch since.</p>
+
+    <div class="queue-section">
+      <div class="queue-section-head">
+        <h4>Welfare checks logged <span class="section-count muted" id="welfareLoggedCount">0</span></h4>
+        <span class="view-note">Most recent first</span>
+      </div>
+      <div id="welfareLogList"></div>
+    </div>
   </section>
 
   <section id="view-map" class="view">
