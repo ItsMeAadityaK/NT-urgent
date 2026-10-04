@@ -101,6 +101,44 @@ writing style from changing the outcome.
   that never saw that message.
 - **Synthetic data.** The 152 messages are synthetic (see `data/messages.py` for the design
   rationale). Real deployment would need evaluation on real, consented correspondence.
+- **Generated shifts are optimistic.** The live shifts (below) are built from templates we wrote, so
+  their wording overlaps in theme with what the baseline trained on. Their scores sit next to, never
+  instead of, the hand-written benchmark above, and the Evaluation tab says so.
+
+---
+
+## Live shifts: new messages every time
+
+The queue no longer shows the same 152 messages every run. By default it shows a **live shift**: about
+55 freshly generated messages (`src/generator.py`), arriving front-loaded like a real storm morning.
+
+- **NEW SHIFT** makes a different shift each press. The seed is shown on screen; type a seed into the
+  box and press NEW SHIFT (or Enter) to replay a shift exactly. `SHIFT_SEED=1234 python3 server.py`
+  sets the first one.
+- **True urgency is a hidden answer key.** Messages are created with a secret label that the queue never
+  shows and no classifier sees. It is only used to score the system afterwards (Evaluation tab). A test
+  checks that flipping every label changes no priority.
+- **Variety comes from independent random pieces**: situation, who and how long, writing style
+  (formal, SMS, rambling, ALL CAPS), and noise (typos, `u`/`2`/`pls` shorthand, voice-to-text mistakes),
+  across 58 scenarios and ~180 templates. The mix is deliberately mostly routine, about 13% critical.
+- **Every shift contains the cases worth demonstrating**: a flooded cut-off critical, a child alone, a
+  collapse, a medication risk, senders who go silent, a sender who follows up (dropout must *not* fire),
+  a routine message from an access-limited sender, and three formal/informal fairness pairs.
+- **Not copied from training data.** Templates were checked against the 152 the baseline trains on, and
+  a test fails if any is more than 80% similar to one of them.
+- **The 152 are still here** as the baseline's training data and an independent benchmark. The Evaluation
+  tab shows both. "Use the 152-message benchmark instead" (under the control bar) switches the queue to it.
+
+With a Claude key set, a new shift sends its ~55 messages to Claude once (a few cents), and the verdicts
+are cached in `data/llm_cache.json` by message text, so **replaying a seed is free and works offline**.
+Do this at home before a demo: run the seed you plan to present, and it replays with the real LLM
+verdicts even with no network. Without a key the shift runs honestly on baseline + safety net, every row
+is flagged NOT LLM-CHECKED, and no LLM verdict is ever invented.
+
+**Community phrases.** The generator never invents Kriol or Aboriginal-language text. If
+`data/community_phrases.json` exists, up to two entries are mixed into each shift. Each entry must be
+written or reviewed by a speaker or interpreter:
+`[{"text": "...", "true_urgency": "critical", "language": "Kriol", "source": "reviewed by ..."}]`.
 
 ---
 
@@ -114,13 +152,20 @@ python3 server.py
 Open **http://127.0.0.1:5050**. (Not 5000: on macOS that port belongs to AirPlay Receiver.
 Override with `PORT=8000 python3 server.py`.)
 
-Optional, to use real Claude outputs:
+Optional, to use real Claude outputs. Put your key in a file called `.env` in the project folder
+(it is already git-ignored, so it never reaches GitHub; never paste a key into any other file):
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-python3 scripts/run_llm_batch.py      # classifies all 152 once → data/llm_results.json
-python3 server.py                     # now uses the cached real outputs; "Try a message" calls Claude live
+python3 server.py                     # reads .env itself; "Try a message" and NEW SHIFT now call Claude
+python3 scripts/run_llm_batch.py      # optional: classify the 152 benchmark messages → data/llm_results.json
 ```
+
+The default model is Claude Sonnet 5.5 (`TRIAGE_MODEL=claude-haiku-4-5` for cheaper, or
+`claude-opus-5-5` for the most capable). Tests never read `.env`, so they cost nothing.
 
 Run the tests:
 
@@ -128,19 +173,22 @@ Run the tests:
 python3 -m pytest -q
 ```
 
-35 tests cover the safety guarantees: nothing lowers a priority, prompt injection can't bury a
-flagged message, every critical message survives an LLM outage, escalation climbs, drafts always
-need approval, and no module imports a message-sending library.
+78 tests cover the safety guarantees (nothing lowers a priority, prompt injection can't bury a
+flagged message, every critical message survives an LLM outage on the benchmark, escalation climbs,
+drafts always need approval, no module imports a message-sending library) and the generated shifts
+(replayable, varied, contain the demo cases, hidden labels never affect priority). Tests never call
+the API, whatever is in your shell.
 
 ---
 
 ## Demo script (≈5 minutes)
 
-1. **The problem (30s).** Wet-season shift, 152 messages, most routine. 23 of them are life or
-   death. Point at the "Needs a human now" panel: it's empty at 06:30.
+1. **The problem (30s).** Press **NEW SHIFT**: a wet-season shift of ~55 freshly generated messages,
+   most of them routine, about 7 life or death. Nobody (including us) knows in advance which ones;
+   the true urgency is a hidden answer key. Drag the clock back to the start of the shift.
 2. **The needle (60s).** Press **PLAY**. As the clock runs, criticals arrive and the 15-minute
    clock starts. Unacknowledged items climb to *Shift supervisor* and then *Duty manager*. Open
-   M019 → **full reasoning + draft reply**. Show the plain-English steps and the **safety-aware
+   a critical item → **full reasoning + draft reply**. Show the plain-English steps and the **safety-aware
    draft** that doesn't repeat the disclosure, in case the person causing harm reads the phone.
 3. **Acknowledge (30s).** Click ACKNOWLEDGE. The item leaves the escalation panel and the
    **time-to-human** tile updates. Scrub the clock backwards: the acknowledgement is time-aware.
@@ -172,10 +220,12 @@ src/escalation.py         Dead-man's switch: supervisor → duty manager
 src/dropout_detector.py   "Sender went silent" detection
 src/explain.py            One-line "Why:" for each item
 src/evaluation.py         Recall-first scoring against ground truth
+src/generator.py          Seeded random shifts: scenarios x style x noise, hidden answer key
 scripts/run_llm_batch.py  One-off real Claude run over the dataset
-data/messages.py          152-message synthetic wet-season shift
+data/messages.py          152 hand-written messages: baseline training data + independent benchmark
 static/                   Hand-built dispatch-console frontend
 tests/test_safety.py      Safety-guarantee tests
+tests/test_shift.py       Generated-shift tests (replay, variety, demo cases, no leakage)
 ```
 
 ---

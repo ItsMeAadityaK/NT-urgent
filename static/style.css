@@ -744,3 +744,52 @@ html, body {
   #ntMap { width: 100%; height: auto; }
   .map-side { width: 100%; }
 }
+
+/* ---------- Live shift controls ---------- */
+.shift-controls { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.seed-input {
+  width: 150px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.72rem;
+  background: var(--mh-bg);
+  color: var(--mh-text);
+  border: 1px solid var(--mh-line);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.seed-input::placeholder { color: var(--mh-muted); }
+.seed-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#clockSlider { min-width: 80px; }
+.ctrl-btn:disabled { opacity: 0.6; cursor: progress; }
+
+.shift-note {
+  color: var(--mh-muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  margin: -6px 2px 16px;
+}
+.shift-note strong { color: var(--mh-text); letter-spacing: 0.04em; }
+.shift-note .link-btn { color: var(--mh-text); margin-left: 6px; }
+.shift-note .link-btn:hover { color: var(--accent); }
+
+/* ---------- Evaluation blocks ---------- */
+.eval-block {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+}
+.eval-block h4 { margin: 0 0 10px; font-size: 1rem; }
+.eval-block .source-note { margin-bottom: 10px; }
+.view-note.caveat { color: var(--high); margin: 0 0 12px; }
+
+@media (max-width: 900px) {
+  .shift-controls { margin-left: 0; width: 100%; }
+  .seed-input { flex: 1; }
+}
+
+.shift-note .credit-note { color: var(--mh-muted); font-size: 0.76rem; }
+.shift-note .credit-note strong { color: var(--mh-text); letter-spacing: 0; }

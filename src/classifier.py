@@ -26,7 +26,33 @@ or, for new text, degrades to baseline + safety net.
 import json
 import os
 
-MODEL = "claude-opus-5-5"
+
+def _load_dotenv():
+    """Read the project's .env file (git-ignored, so it never reaches GitHub) into the
+    environment. A key already set in your terminal wins. Tests turn this off."""
+    if os.environ.get("TRIAGE_NO_DOTENV"):
+        return
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+    except OSError:
+        pass
+
+
+_load_dotenv()
+
+# Sonnet 5.5: a strong, still cheap model for a four-way classification. Override with
+# the TRIAGE_MODEL environment variable (claude-haiku-4-5 is cheaper again, and
+# claude-opus-5-5 is the most capable).
+MODEL = os.environ.get("TRIAGE_MODEL", "claude-sonnet-5-5")
+# Only these model families accept the `effort` setting and server-side refusal
+# fallback. Haiku rejects both, so it gets the plain structured-output request.
+_FULL_FEATURE_MODELS = ("claude-opus-5", "claude-fable", "claude-sonnet-5-5")
 URGENCY_LEVELS = ["low", "medium", "high", "critical"]
 
 SYSTEM_PROMPT = """You are an urgency triage assistant for a Northern Territory government
@@ -88,17 +114,26 @@ def classify_urgency(message_text: str) -> dict:
 
     try:
         client = anthropic.Anthropic(timeout=30.0, max_retries=2)
-        response = client.beta.messages.create(
+        request = dict(
             model=MODEL,
             max_tokens=1024,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": f"<message>\n{message_text}\n</message>"}],
-            output_config={"effort": "low", "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
-            # Server-side fallback: if the primary model declines, the API
-            # retries on a fallback model inside the same call.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
         )
+        if MODEL.startswith(_FULL_FEATURE_MODELS):
+            response = client.beta.messages.create(
+                **request,
+                output_config={"effort": "low", "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
+                # Server-side fallback: if the primary model declines, the API
+                # retries on a fallback model inside the same call.
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
+            )
+        else:
+            response = client.messages.create(
+                **request,
+                output_config={"format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
+            )
     except anthropic.APIConnectionError as e:
         return {"ok": False, "error": f"network error: {e}", "model_source": "llm"}
     except anthropic.RateLimitError:

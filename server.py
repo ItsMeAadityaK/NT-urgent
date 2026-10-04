@@ -29,10 +29,14 @@ Run with:
 then open http://127.0.0.1:5050
 """
 
+import hashlib
 import json
 import os
+import random
 import statistics
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -43,11 +47,12 @@ sys.path.insert(0, os.path.join(ROOT, "data"))
 
 from acknowledgement import draft_acknowledgement  # noqa: E402
 from baseline_model import classify_urgency_baseline, train_baseline_from_dataset  # noqa: E402
-from classifier import classify_urgency, llm_configured  # noqa: E402
+from classifier import MODEL, classify_urgency, llm_configured  # noqa: E402
 from dropout_detector import check_dropout  # noqa: E402
 from escalation import check_escalation_timeout  # noqa: E402
 from evaluation import score  # noqa: E402
 from explain import headline  # noqa: E402
+from generator import DEFAULT_SIZE as SHIFT_SIZE, generate_shift  # noqa: E402
 from messages import SIMULATION_START, get_sample_messages  # noqa: E402
 from routing import route_message  # noqa: E402
 from safety_net import check_safety_net  # noqa: E402
@@ -136,10 +141,8 @@ def _triage_submitted(msg: dict, llm_online: bool) -> dict:
     and we're not simulating an outage, otherwise an honest 'unavailable'."""
     if not llm_online:
         llm = {"ok": False, "error": "simulated LLM outage"}
-    elif llm_configured():
-        llm = classify_urgency(msg["raw_text"])
     else:
-        llm = {"ok": False, "error": "no API key configured on this server"}
+        llm = _llm_one(msg["raw_text"])
     return _finish_triage(msg, llm)
 
 
@@ -171,6 +174,198 @@ def _evaluation():
 
 
 _EVALUATION = _evaluation()
+
+
+# ---------------------------------------------------------------------------
+# Live shifts: a freshly generated, seeded set of messages with a HIDDEN answer
+# key. The 152 hand-written messages above stay as (a) the baseline's training
+# data and (b) an independent benchmark. A shift is what the queue shows by default.
+# ---------------------------------------------------------------------------
+LLM_CACHE_PATH = os.path.join(ROOT, "data", "llm_cache.json")
+_ACTIVE = {}
+
+
+def _reset_actions():
+    _acks.clear()
+    _draft_approvals.clear()
+    _welfare_checks.clear()
+    _submitted.clear()
+    _submitted_static[True].clear()
+    _submitted_static[False].clear()
+    _submit_counter[0] = 0
+
+
+def _text_key(text: str) -> str:
+    # Includes the model, so switching models never replays another model's verdicts.
+    return hashlib.sha1(f"{MODEL}\n{text}".encode("utf-8")).hexdigest()
+
+
+def _read_llm_cache() -> dict:
+    try:
+        with open(LLM_CACHE_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+# ---------------------------------------------------------------------------
+# The ONLY place this server spends API credits is _live_call(). Every call is
+# counted and capped, and a verdict already saved in the cache is never paid for
+# twice. Moving the clock (PLAY), acknowledging, toggling the LLM, switching tabs
+# and replaying a seed you have run before all cost nothing.
+# ---------------------------------------------------------------------------
+LLM_CALL_LIMIT = int(os.environ.get("LLM_CALL_LIMIT", "300"))
+_LLM_USAGE = {"live_calls": 0}
+_llm_lock = threading.Lock()
+
+
+def _live_call(text: str) -> dict:
+    with _llm_lock:
+        if _LLM_USAGE["live_calls"] >= LLM_CALL_LIMIT:
+            return {"ok": False, "error": f"call limit reached ({LLM_CALL_LIMIT} per server run) - this protects your credits"}
+        _LLM_USAGE["live_calls"] += 1
+    return classify_urgency(text)
+
+
+def _remember(pairs: list):
+    """Save verdicts (text, result) to the cache file so they replay free next time."""
+    with _llm_lock:
+        cache = _read_llm_cache()
+        for text, r in pairs:
+            if r.get("ok"):
+                cache[_text_key(text)] = {"urgency_score": r["urgency_score"], "flag_reason": r["flag_reason"],
+                                          "model": r.get("model", MODEL)}
+        try:
+            with open(LLM_CACHE_PATH, "w", encoding="utf-8") as f:
+                json.dump(cache, f, indent=1)
+        except OSError:
+            pass
+
+
+def _llm_one(text: str) -> dict:
+    """One message: saved verdict if we have it, otherwise one live call (then saved)."""
+    hit = _read_llm_cache().get(_text_key(text))
+    if hit:
+        return {"ok": True, **hit, "cached": True}
+    if not llm_configured():
+        return {"ok": False, "error": "no API key configured on this server"}
+    r = _live_call(text)
+    _remember([(text, r)])
+    return r
+
+
+def _llm_for_messages(messages: list, allow_live: bool = True) -> dict:
+    """LLM verdict per generated message. A saved verdict is reused (so a shift can be
+    replayed offline and for free); otherwise, if a key is configured AND live calls are
+    allowed, the messages are classified for real; otherwise the LLM is honestly
+    'unavailable'. The first call is a probe: if it fails (no network, bad key) the rest
+    are not attempted, so a dead connection can never stall or drain anything."""
+    cache = _read_llm_cache()
+    out, todo = {}, []
+    for m in messages:
+        hit = cache.get(_text_key(m["raw_text"]))
+        if hit:
+            out[m["message_id"]] = {"ok": True, **hit, "cached": True}
+        else:
+            todo.append(m)
+
+    if todo and allow_live and llm_configured():
+        probe = _live_call(todo[0]["raw_text"])
+        results = [probe]
+        if probe.get("ok"):
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                results += list(pool.map(lambda m: _live_call(m["raw_text"]), todo[1:]))
+        else:
+            results += [probe] * (len(todo) - 1)
+        for m, r in zip(todo, results):
+            out[m["message_id"]] = r
+        _remember([(m["raw_text"], r) for m, r in zip(todo, results)])
+
+    for m in todo:
+        why = ("no API key configured on this server" if not llm_configured()
+               else "not fetched yet (press NEW SHIFT to have Claude judge this shift)")
+        out.setdefault(m["message_id"], {"ok": False, "error": why})
+    return out
+
+
+def _per_class_recall(preds: list, truths: list) -> dict:
+    out = {}
+    for level in ("low", "medium", "high", "critical"):
+        idx = [i for i, t in enumerate(truths) if t == level]
+        if idx:
+            out[level] = sum(preds[i] == level for i in idx) / len(idx)
+    return out
+
+
+def _evaluate_shift(messages: list, static: dict, llm: dict) -> dict:
+    ids = [m["message_id"] for m in messages]
+    truths = [m["true_urgency"] for m in messages]
+    online, offline = static[True], static[False]
+    n_ok = sum(1 for i in ids if llm[i].get("ok"))
+    llm_all = n_ok == len(ids)
+    base_preds = [online[i]["baseline_urgency"] for i in ids]
+
+    if llm_all:
+        cached = sum(1 for i in ids if llm[i].get("cached"))
+        source = (f"Real Claude verdicts on this shift ({len(ids) - cached} fetched live, {cached} replayed from cache)")
+    elif n_ok:
+        source = f"Real Claude verdicts for only {n_ok} of {len(ids)} messages (the rest failed), so the LLM rows are omitted"
+    else:
+        source = "No LLM verdicts for this shift (no API key, or the calls failed). Only the baseline and safety net are scored."
+
+    rows = []
+    if llm_all:
+        rows.append(score("LLM alone", [online[i]["decision"]["content_urgency"] for i in ids], truths, ids))
+    rows.append(score("Baseline alone (trained on the 152 hand-written messages, never saw this shift)",
+                      base_preds, truths, ids))
+    rows.append(score("Safety-net rules alone", [check_safety_net(m["raw_text"])["floor"] or "low" for m in messages],
+                      truths, ids, note="Rules only ever raise; unmatched messages count as low here."))
+    if llm_all:
+        rows.append(score("Full pipeline — LLM online", [online[i]["decision"]["access_adjusted_priority"] for i in ids],
+                          truths, ids, include_accuracy=False))
+    rows.append(score("Full pipeline — LLM OUTAGE (baseline + safety net + access)",
+                      [offline[i]["decision"]["access_adjusted_priority"] for i in ids], truths, ids,
+                      include_accuracy=False, note="What still reaches a human if the LLM is unavailable."))
+    return {
+        "title": "This shift",
+        "n": len(ids),
+        "caveat": ("These messages were written by us as templates, so the wording overlaps with what the baseline "
+                   "trained on. Treat these scores as optimistic; the hand-written benchmark below is the independent check."),
+        "llm_source": source,
+        "llm_is_real": llm_all,
+        "llm_ok": n_ok,
+        "rows": rows,
+        "baseline_per_class_recall": _per_class_recall(base_preds, truths),
+    }
+
+
+def _activate(mode: str = "shift", seed=None, allow_live: bool = True):
+    """Make `mode` the live queue: a generated shift (default) or the 152 benchmark.
+    Clears all officer actions, since message ids differ between shifts."""
+    _reset_actions()
+    if mode == "benchmark":
+        _ACTIVE.update(mode="benchmark", seed=None, messages=_MESSAGES, static=_STATIC,
+                       evaluation={**_EVALUATION, "title": "Benchmark", "n": len(_MESSAGES)}, llm={})
+        return
+    try:
+        seed = int(seed)
+    except (TypeError, ValueError):
+        seed = random.SystemRandom().randint(1000, 9999)
+    messages = generate_shift(seed, n=SHIFT_SIZE)
+    llm = _llm_for_messages(messages, allow_live=allow_live)
+    outage = {"ok": False, "error": "simulated LLM outage"}
+    static = {
+        True: {m["message_id"]: _finish_triage(m, llm[m["message_id"]]) for m in messages},
+        False: {m["message_id"]: _finish_triage(m, outage) for m in messages},
+    }
+    _ACTIVE.update(mode="shift", seed=seed, messages=messages, static=static,
+                   evaluation=_evaluate_shift(messages, static, llm), llm=llm)
+
+
+# Starting (or auto-reloading) the server must never spend credits, so it only ever replays saved
+# verdicts. It opens on the demo seed; NEW SHIFT is what fetches a brand-new shift from Claude.
+DEMO_SEED = 2026
+_activate("shift", os.environ.get("SHIFT_SEED") or DEMO_SEED, allow_live=False)
 
 
 def _welfare_log(arrived: list, static: dict, minutes_elapsed: int) -> list:
@@ -217,8 +412,8 @@ def _arrival_minute(msg) -> int:
 def _build_state(minutes_elapsed: int, llm_online: bool):
     minutes_elapsed = max(0, min(SIM_MAX_MINUTES, minutes_elapsed))
     current_time = SIMULATION_START + timedelta(minutes=minutes_elapsed)
-    static = {**_STATIC[llm_online], **_submitted_static[llm_online]}
-    all_messages = _MESSAGES + _submitted
+    static = {**_ACTIVE["static"][llm_online], **_submitted_static[llm_online]}
+    all_messages = _ACTIVE["messages"] + _submitted
     arrived = [m for m in all_messages if m["timestamp"] <= current_time]
 
     # Sender histories for dropout detection, using the triaged content
@@ -321,11 +516,20 @@ def _build_state(minutes_elapsed: int, llm_online: bool):
         "sim_max_minutes": SIM_MAX_MINUTES,
         "llm_online": llm_online,
         "llm_live_configured": llm_configured(),
+        "llm_usage": {"live_calls": _LLM_USAGE["live_calls"], "limit": LLM_CALL_LIMIT},
         "messages": processed,
         "fairness_pairs": [{"pair_id": pid, **sides} for pid, sides in sorted(fairness_pairs.items())],
         "time_to_human": time_to_human,
         "baseline_eval": {k: v for k, v in _BASELINE_EVAL.items() if k != "oof_predictions"},
-        "evaluation": _EVALUATION,
+        "evaluation": _ACTIVE["evaluation"],
+        "benchmark_evaluation": {**_EVALUATION, "title": "Benchmark", "n": len(_MESSAGES)}
+                                if _ACTIVE["mode"] != "benchmark" else None,
+        "shift": {
+            "mode": _ACTIVE["mode"],
+            "seed": _ACTIVE["seed"],
+            "n": len(_ACTIVE["messages"]),
+            "llm_ok": _ACTIVE["evaluation"].get("llm_ok"),
+        },
     }
 
 
@@ -400,13 +604,17 @@ def api_welfare_check():
 
 @app.post("/api/reset")
 def api_reset():
-    _acks.clear()
-    _draft_approvals.clear()
-    _welfare_checks.clear()
-    _submitted.clear()
-    _submitted_static[True].clear()
-    _submitted_static[False].clear()
+    _reset_actions()
     return _state_from_body(_body())
+
+
+@app.post("/api/new_shift")
+def api_new_shift():
+    """Generate a brand-new shift (random seed, or replay one by passing `seed`),
+    or switch to the fixed 152-message benchmark with mode="benchmark"."""
+    body = _body()
+    _activate("benchmark" if body.get("mode") == "benchmark" else "shift", body.get("seed"))
+    return _state_from_body(body)
 
 
 @app.post("/api/classify")
@@ -421,10 +629,8 @@ def api_classify():
 
     if not _llm_flag(body.get("llm", "on")):
         llm = {"ok": False, "error": "simulated LLM outage"}
-    elif llm_configured():
-        llm = classify_urgency(text)
     else:
-        llm = {"ok": False, "error": "no API key configured on this server"}
+        llm = _llm_one(text)
 
     baseline = classify_urgency_baseline(text)
     decision = decide_priority(text, access, llm, baseline["urgency_score"])

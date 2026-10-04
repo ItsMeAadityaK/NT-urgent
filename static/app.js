@@ -42,7 +42,7 @@ const EXAMPLES = [
 ];
 
 const state = {
-  minutes: 30,
+  minutes: 60,
   view: "queue",
   llmOnline: true,
   playing: false,
@@ -113,6 +113,29 @@ async function resetAcks() {
   applyState(await api("/api/reset", common()));
 }
 
+// A new shift replaces the whole queue (message ids differ), so every piece of
+// per-queue UI state is cleared and the clock goes back to the start of the shift.
+async function newShift(mode = "shift") {
+  const btn = el("newShiftBtn");
+  if (state.playing) togglePlay();
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "GENERATING…";
+  setMinutes(60);
+  state.expanded.clear();
+  state.priorityFilter = "";
+  state.teamFilter = "";
+  state.activePin = null;
+  state.welfareForm = null;
+  try {
+    const seed = mode === "shift" ? el("seedInput").value.trim() : "";
+    applyState(await api("/api/new_shift", { mode, seed: seed || null, ...common() }));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
 function applyState(data) {
   state.data = data;
   el("clockValue").textContent = fmtTime(data.current_time);
@@ -123,6 +146,7 @@ function applyState(data) {
 function render() {
   if (!state.data) return;
   renderLlmStatus();
+  renderShiftNote();
   renderAttention();
   renderStats();
   if (state.view === "queue") renderQueue();
@@ -141,6 +165,34 @@ function renderLlmStatus() {
   btn.textContent = state.llmOnline ? "LLM: ONLINE" : "LLM: OUTAGE (SIMULATED)";
   btn.classList.toggle("outage", !state.llmOnline);
   el("degradedBanner").hidden = state.llmOnline;
+}
+
+// ---------- Which queue is this? ----------
+function renderShiftNote() {
+  const s = state.data.shift;
+  if (!s) return;
+  let html;
+  if (s.mode === "shift") {
+    const noKey = !state.data.llm_live_configured;
+    const llm = s.llm_ok === s.n ? "Claude has judged every message"
+      : s.llm_ok ? `Claude judged ${s.llm_ok} of ${s.n} messages`
+      : noKey ? "no API key set, so the LLM layer is off (baseline + safety net only)"
+      : "the LLM calls failed, so this shift runs on baseline + safety net only";
+    html = `<strong>LIVE SHIFT</strong> <span class="mono">seed ${s.seed}</span> &middot; ${s.n} freshly generated messages
+      &middot; true urgency is a hidden answer key, used only to score the system &middot; ${llm}
+      <button class="link-btn" id="modeSwitchBtn">use the 152-message benchmark instead</button>`;
+  } else {
+    html = `<strong>BENCHMARK</strong> &middot; ${s.n} fixed, hand-written messages
+      <button class="link-btn" id="modeSwitchBtn">back to a fresh live shift</button>`;
+  }
+  const u = state.data.llm_usage;
+  if (state.data.llm_live_configured && u) {
+    html += `<br><span class="credit-note">Credits: Claude calls this run <strong>${u.live_calls}</strong> of ${u.limit} allowed
+      (about ${u.live_calls ? Math.max(1, Math.round(u.live_calls * 0.5)) : 0}&cent; so far). PLAY, tabs and replaying a saved seed cost nothing;
+      a never-seen seed costs about 25&cent;.</span>`;
+  }
+  el("shiftNote").innerHTML = html;
+  el("modeSwitchBtn").addEventListener("click", () => newShift(s.mode === "shift" ? "benchmark" : "shift"));
 }
 
 // ---------- Needs a human now ----------
@@ -433,12 +485,11 @@ function bindActions(root) {
 }
 
 // ---------- Evaluation / compare ----------
-function renderCompare() {
-  const ev = state.data.evaluation;
-  el("llmSourceNote").innerHTML = `<strong>LLM results source:</strong> ${escapeHtml(ev.llm_source)}`;
-  el("llmSourceNote").className = ev.llm_is_real ? "source-note" : "source-note warn";
-
-  el("evalTableWrap").innerHTML = `
+function evalBlock(ev, heading) {
+  return `
+    <h4>${escapeHtml(heading)} <span class="view-note">(${ev.n} messages)</span></h4>
+    <p class="${ev.llm_is_real ? "source-note" : "source-note warn"}"><strong>LLM:</strong> ${escapeHtml(ev.llm_source)}</p>
+    ${ev.caveat ? `<p class="view-note caveat"><strong>Read with care:</strong> ${escapeHtml(ev.caveat)}</p>` : ""}
     <table class="dispatch-table eval-table">
       <tr><th>Approach</th><th>Exact accuracy</th><th>Urgent recall<br>(true high/critical → fast lane)</th>
           <th>Critical recall</th><th>Routine items pushed<br>into fast lane</th><th>Urgent items missed</th></tr>
@@ -451,30 +502,41 @@ function renderCompare() {
         <td class="mono">${r.missed_urgent.length ? r.missed_urgent.join(", ") : "none"}</td>
       </tr>`).join("")}
     </table>
-    <p class="view-note">Measured on all 152 messages against the ground-truth label. Recall is the headline
-    because the brief's failure mode is an urgent message getting buried; the "routine items pushed into fast lane"
-    column is the price paid for that (officer time). Baseline per-class recall:
-    ${Object.entries(state.data.evaluation.baseline_per_class_recall).map(([k, v]) => `${k} ${pct(v)}`).join(" · ")}.</p>`;
+    <p class="view-note">Scored against the ground-truth label. Recall is the headline because the brief's failure mode is an
+    urgent message getting buried; "routine items pushed into fast lane" is the price paid for that (officer time).
+    Baseline per-class recall: ${Object.entries(ev.baseline_per_class_recall).map(([k, v]) => `${k} ${pct(v)}`).join(" · ")}.</p>`;
+}
+
+function renderCompare() {
+  const isShift = state.data.shift && state.data.shift.mode === "shift";
+  el("evalPrimary").innerHTML = `<div class="eval-block">${evalBlock(state.data.evaluation,
+    isShift ? "This live shift (scored against its hidden answer key)" : "Benchmark: 152 hand-written messages, cross-validated")}</div>`;
+  const bench = state.data.benchmark_evaluation;
+  el("evalBenchmark").innerHTML = bench
+    ? `<div class="eval-block">${evalBlock(bench, "Independent benchmark: 152 hand-written messages, cross-validated")}</div>` : "";
 
   const msgs = state.data.messages.filter((m) => m.true_urgency != null);
   let disagree = 0;
   const rows = msgs.map((m) => {
+    const hasLlm = !!m.llm_urgency;
     const llm = m.llm_urgency || "—";
-    const agree = llm === m.baseline_urgency;
+    const agree = !hasLlm || llm === m.baseline_urgency;   // no LLM verdict = nothing to disagree with
     if (!agree) disagree++;
     const preview = m.raw_text.length > 70 ? m.raw_text.slice(0, 70) + "…" : m.raw_text;
     return `<tr class="${agree ? "" : "row-disagree"}">
       <td class="mono">${m.message_id}</td><td>${escapeHtml(preview)}</td>
-      <td>${m.true_urgency}</td><td class="${llm !== m.true_urgency ? "disagree" : ""}">${llm}</td>
+      <td>${m.true_urgency}</td><td class="${hasLlm && llm !== m.true_urgency ? "disagree" : ""}">${llm}</td>
       <td class="${m.baseline_urgency !== m.true_urgency ? "disagree" : ""}">${m.baseline_urgency}</td>
       <td>${m.access_adjusted_priority}</td>
     </tr>`;
   }).join("");
 
+  const baselineLabel = isShift ? "Baseline (never saw it)" : "Baseline (out-of-fold)";
   el("compareTableWrap").innerHTML = `
     <h4>Per-message view (messages received so far): ${disagree} LLM/baseline disagreement(s)</h4>
+    <p class="view-note">The "answer key" column is the hidden label, revealed here only so you can see how each layer did.</p>
     <table class="dispatch-table">
-      <tr><th>Message</th><th>Text</th><th>True label</th><th>LLM</th><th>Baseline (out-of-fold)</th><th>Final priority</th></tr>
+      <tr><th>Message</th><th>Text</th><th>Answer key</th><th>LLM</th><th>${baselineLabel}</th><th>Final priority</th></tr>
       ${rows}
     </table>`;
 }
@@ -490,7 +552,7 @@ function renderFairness() {
     return;
   }
 
-  let llmOk = 0, baseOk = 0, finalOk = 0, complete = 0;
+  let llmOk = 0, llmN = 0, baseOk = 0, finalOk = 0, complete = 0;
   container.innerHTML = pairs.map((p) => {
     const inf = p.informal, frm = p.formal;
     if (!inf || !frm) {
@@ -499,9 +561,12 @@ function renderFairness() {
         <p class="view-note">Waiting on the ${inf ? "formal" : "informal"} half of this pair to arrive (true urgency: ${have.true_urgency}).</p></div>`;
     }
     complete++;
-    const llmMatch = inf.llm_urgency === frm.llm_urgency;
+    // With the LLM off both sides are null, and null === null must not read as "consistent".
+    const llmKnown = !!(inf.llm_urgency && frm.llm_urgency);
+    const llmMatch = llmKnown && inf.llm_urgency === frm.llm_urgency;
     const baseMatch = inf.baseline_urgency === frm.baseline_urgency;
     const finalMatch = inf.access_adjusted_priority === frm.access_adjusted_priority;
+    if (llmKnown) llmN++;
     if (llmMatch) llmOk++;
     if (baseMatch) baseOk++;
     if (finalMatch) finalOk++;
@@ -514,7 +579,8 @@ function renderFairness() {
         ${row(inf, "Informal / SMS")}${row(frm, "Formal written")}
       </table>
       <p class="pair-verdict">
-        <span class="${llmMatch ? "good" : "disagree"}">LLM consistent: ${llmMatch ? "Yes" : "No"}</span> &middot;
+        ${llmKnown ? `<span class="${llmMatch ? "good" : "disagree"}">LLM consistent: ${llmMatch ? "Yes" : "No"}</span>`
+                   : `<span class="view-note">LLM: no verdict (offline)</span>`} &middot;
         <span class="${baseMatch ? "good" : "disagree"}">Baseline consistent: ${baseMatch ? "Yes" : "No"}</span> &middot;
         <span class="${finalMatch ? "good" : "disagree"}">Final priority consistent: ${finalMatch ? "Yes" : "No"}</span>
       </p>
@@ -522,7 +588,7 @@ function renderFairness() {
   }).join("");
 
   el("fairnessSummary").innerHTML = complete
-    ? `<p><strong>Across ${complete} complete pair(s):</strong> LLM consistent on ${llmOk}/${complete},
+    ? `<p><strong>Across ${complete} complete pair(s):</strong> ${llmN ? `LLM consistent on ${llmOk}/${llmN}` : "LLM offline (no verdicts)"},
        baseline on ${baseOk}/${complete}, final priority (after safety net + access weighting) on ${finalOk}/${complete}.
        Where a classifier is inconsistent, the safety net and access weighting are what stop the informal writer being disadvantaged.</p>`
     : "";
@@ -629,7 +695,7 @@ async function runTry() {
       </div>
       <div class="try-footer">
         <button id="addToQueueBtn" class="ctrl-btn">+ ADD TO QUEUE</button>
-        <span class="view-note">This is just a preview above — nothing's saved until you add it. It won't affect the Evaluation/Fairness numbers (those are measured on the fixed 152-message set only).</span>
+        <span class="view-note">This is just a preview above — nothing's saved until you add it. It won't affect the Evaluation/Fairness numbers (those only score the generated shift and the benchmark, never messages you type).</span>
       </div>
     </div>`;
 
@@ -698,6 +764,8 @@ el("clockSlider").addEventListener("input", (e) => {
 });
 el("playBtn").addEventListener("click", togglePlay);
 el("resetBtn").addEventListener("click", resetAcks);
+el("newShiftBtn").addEventListener("click", () => newShift("shift"));
+el("seedInput").addEventListener("keydown", (e) => { if (e.key === "Enter") newShift("shift"); });
 el("llmBtn").addEventListener("click", () => {
   state.llmOnline = !state.llmOnline;
   fetchState();

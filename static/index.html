@@ -32,8 +32,8 @@
 
     <div class="control-bar">
       <button id="playBtn" class="ctrl-btn" title="Auto-advance the clock">&#9654; PLAY</button>
-      <input type="range" id="clockSlider" min="0" max="480" step="15" value="30" aria-label="Simulation clock">
-      <span class="ctrl-readout" id="minutesReadout">+30 min</span>
+      <input type="range" id="clockSlider" min="0" max="480" step="15" value="60" aria-label="Simulation clock">
+      <span class="ctrl-readout" id="minutesReadout">+60 min</span>
       <select id="speedSelect" class="ctrl-select" title="Auto-advance speed" aria-label="Speed">
         <option value="900">1x</option>
         <option value="450">2x</option>
@@ -41,7 +41,14 @@
       </select>
       <button id="llmBtn" class="ctrl-btn llm-btn" title="Simulate the LLM being unavailable (API outage / no connectivity)">LLM: ONLINE</button>
       <button id="resetBtn" class="ctrl-btn ghost" title="Clear all officer actions">RESET</button>
+      <span class="shift-controls">
+        <input id="seedInput" class="seed-input" type="text" inputmode="numeric" maxlength="9" placeholder="seed (optional)"
+               aria-label="Shift seed" title="Leave empty for a random shift. Type a seed to replay a shift exactly.">
+        <button id="newShiftBtn" class="ctrl-btn" title="Generate a brand-new set of messages. With an API key, a seed you have never run costs about 25 cents of credit (55 Claude calls); a seed you have run before is free.">NEW SHIFT</button>
+      </span>
     </div>
+
+    <div id="shiftNote" class="shift-note"></div>
 
     <div id="degradedBanner" class="degraded-banner" hidden>
       <strong>LLM OUTAGE (SIMULATED).</strong> Every item is being triaged in degraded mode: the local baseline
@@ -159,17 +166,16 @@
 
   <section id="view-compare" class="view">
     <h3>Does an urgent message reach a human? Measured, not assumed.</h3>
-    <p id="llmSourceNote" class="source-note"></p>
-    <div id="evalTableWrap"></div>
+    <div id="evalPrimary"></div>
+    <div id="evalBenchmark"></div>
     <div id="compareTableWrap"></div>
   </section>
 
   <section id="view-fairness" class="view">
     <h3>Formal vs informal phrasing: does urgency detection stay consistent?</h3>
-    <p class="view-note">Five matched pairs, one per urgency band. Each pair describes the same situation,
-    from the same place with the same access, written two ways: once informally (SMS style) and once in formal
-    written English. A fair system gives both halves of a pair the same priority. If it doesn't, that's a real
-    finding to report, not a bug to hide.</p>
+    <p class="view-note">Matched pairs: each one describes the same situation, from the same place with the same
+    access, written two ways: once informally (SMS style) and once in formal written English. A fair system gives
+    both halves of a pair the same priority. If it doesn't, that's a real finding to report, not a bug to hide.</p>
     <div id="fairnessPairs"></div>
     <div id="fairnessSummary"></div>
   </section>
