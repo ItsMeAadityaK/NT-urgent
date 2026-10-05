@@ -133,7 +133,10 @@ html, body {
   border-radius: var(--radius);
   padding: 12px 16px;
   margin-bottom: 18px;
+  flex-wrap: wrap;          /* wrap whole controls onto a second row rather than squashing them */
+  row-gap: 10px;
 }
+.control-bar .ctrl-btn, .role-pick { white-space: nowrap; flex-shrink: 0; }
 .ctrl-btn {
   font-family: 'Space Mono', monospace;
   font-size: 0.72rem;
@@ -154,7 +157,7 @@ html, body {
 }
 .ctrl-btn.ghost:hover { color: var(--mh-text); border-color: var(--mh-muted); }
 .ctrl-btn.playing { background: var(--critical); }
-#clockSlider { flex: 1; accent-color: var(--accent); }
+#clockSlider { flex: 1 1 160px; accent-color: var(--accent); }
 .ctrl-readout {
   font-family: 'Space Mono', monospace;
   font-size: 0.78rem;
@@ -793,3 +796,52 @@ html, body {
 
 .shift-note .credit-note { color: var(--mh-muted); font-size: 0.76rem; }
 .shift-note .credit-note strong { color: var(--mh-text); letter-spacing: 0; }
+
+/* ---------- Acting as / Activity log ---------- */
+.role-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--mh-muted);
+}
+.activity-row {
+  display: grid;
+  grid-template-columns: 52px 130px 150px 1fr;
+  gap: 4px 12px;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-left: 4px solid var(--row-color);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+.activity-time { font-weight: 700; color: var(--ink); }
+.activity-kind { font-family: 'Space Mono', monospace; font-size: 0.7rem; font-weight: 700; color: var(--ink-soft); }
+.activity-msg { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.activity-text { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-detail { grid-column: 2 / -1; color: var(--ink-soft); font-size: 0.8rem; }
+.actor-badge {
+  justify-self: start;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--ink-faint);
+}
+.actor-officer { background: var(--low); }
+.actor-shift-supervisor { background: var(--high); }
+.actor-duty-manager { background: var(--critical); }
+@media (max-width: 900px) {
+  .activity-row { grid-template-columns: 1fr; }
+  .activity-detail { grid-column: auto; }
+  .activity-text { white-space: normal; }
+}
+.wf-as { color: inherit; }
+.wf-hint { opacity: 0.7; font-size: 0.68rem; }

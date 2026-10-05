@@ -191,3 +191,42 @@ def test_welfare_check_rejects_unknown_roles():
     state = client.post("/api/welfare_check", json={"sender_id": "S001", "minutes": 200, "logged_by": "Anyone"}).get_json()
     server._welfare_checks.clear()
     assert state["welfare_log"][0]["logged_by"] == "Officer"
+
+
+def test_activity_log_records_who_acted_and_system_escalations():
+    """The audit trail shows the system escalating an ignored critical item up the
+    chain, then the role that finally acknowledged it, in time order."""
+    import server
+    server._activate("benchmark")
+    client = server.app.test_client()
+    state = client.post("/api/acknowledge",
+                        json={"message_id": "M001", "minutes": 60, "role": "Duty manager"}).get_json()
+    events = [(e["actor"], e["kind"], e["detail"]) for e in reversed(state["activity_log"])
+              if e["message_id"] == "M001"]
+    assert [(a, k) for a, k, _ in events] == [
+        ("System", "escalated"), ("System", "escalated"), ("Duty manager", "acknowledged")]
+    assert "Shift supervisor" in events[0][2] and "Duty manager" in events[1][2]
+    m001 = next(m for m in state["messages"] if m["message_id"] == "M001")
+    assert m001["acknowledged_by"] == "Duty manager"
+    server._reset_actions()
+
+
+def test_prompt_acknowledgement_means_no_escalation_in_the_log():
+    import server
+    server._activate("benchmark")
+    client = server.app.test_client()
+    state = client.post("/api/acknowledge",
+                        json={"message_id": "M004", "minutes": 20, "role": "Officer"}).get_json()
+    kinds = [e["kind"] for e in state["activity_log"] if e["message_id"] == "M004"]
+    server._reset_actions()
+    assert kinds == ["acknowledged"]
+
+
+def test_unknown_role_is_recorded_as_officer():
+    import server
+    server._activate("benchmark")
+    client = server.app.test_client()
+    state = client.post("/api/acknowledge",
+                        json={"message_id": "M004", "minutes": 20, "role": "Minister"}).get_json()
+    server._reset_actions()
+    assert next(m for m in state["messages"] if m["message_id"] == "M004")["acknowledged_by"] == "Officer"

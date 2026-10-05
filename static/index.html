@@ -41,6 +41,13 @@
       </select>
       <button id="llmBtn" class="ctrl-btn llm-btn" title="Simulate the LLM being unavailable (API outage / no connectivity)">LLM: ONLINE</button>
       <button id="resetBtn" class="ctrl-btn ghost" title="Clear all officer actions">RESET</button>
+      <label class="role-pick" title="Who you are acting as. Every action is recorded against this role, and the alert panel shows this role's desk.">ACTING AS
+        <select id="roleSelect" class="ctrl-select" aria-label="Acting as">
+          <option>Officer</option>
+          <option>Shift supervisor</option>
+          <option>Duty manager</option>
+        </select>
+      </label>
       <span class="shift-controls">
         <input id="seedInput" class="seed-input" type="text" inputmode="numeric" maxlength="9" placeholder="seed (optional)"
                aria-label="Shift seed" title="Leave empty for a random shift. Type a seed to replay a shift exactly.">
@@ -72,6 +79,7 @@
   <button class="tab-btn" data-view="fairness">Fairness Audit</button>
   <button class="tab-btn" data-view="acked">Acknowledged <span class="tab-count" id="ackTabCount">0</span></button>
   <button class="tab-btn" data-view="welfare">Welfare Checks <span class="tab-count" id="welfareTabCount">0</span></button>
+  <button class="tab-btn" data-view="activity">Activity Log <span class="tab-count" id="activityTabCount">0</span></button>
 </nav>
 
 <main>
@@ -100,6 +108,14 @@
     <p class="view-note">Items an officer has picked up. They've stopped escalating, but the full reasoning and
     draft reply are still here, and drafts can still be approved.</p>
     <div id="ackedList"></div>
+  </section>
+
+  <section id="view-activity" class="view">
+    <p class="view-note">The audit trail: every action by an officer, shift supervisor or duty manager, and every automatic
+    escalation the system made, newest first. Use <strong>Acting as</strong> at the top to choose who you are; whatever you
+    do is recorded against that role.</p>
+    <div id="activityFilter" class="chip-row" role="group" aria-label="Filter by who acted"></div>
+    <div id="activityList"></div>
   </section>
 
   <section id="view-welfare" class="view">
