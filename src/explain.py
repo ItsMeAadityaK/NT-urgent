@@ -20,6 +20,9 @@ def headline(decision: dict, route: dict) -> str:
         sig = decision["safety_signals"][0]
         parts.append(f"safety tripwire “{sig['matched']}” → {decision['after_safety_net']}")
 
+    if decision.get("language_flag"):
+        parts.append("language not recognised → at least high, a person must read it in full")
+
     if decision["access_adjusted_priority"] != decision["after_safety_net"]:
         parts.append(f"sender access limited → {decision['access_adjusted_priority']}")
 

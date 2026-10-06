@@ -10,6 +10,9 @@ signal is combined here in a fixed, explainable order:
                       marked so the officer knows it wasn't LLM-checked).
   2. SAFETY FLOOR   — deterministic tripwires (safety_net.py) can raise
                       content urgency, never lower it.
+  2b. READABILITY   — text the system cannot read (another language, or too garbled)
+                      is never allowed to rank below 'high' (language_check.py), so
+                      a message in a language we don't understand is never buried.
   3. ACCESS WEIGHT  — how reachable the sender is (access_scoring.py) can
                       raise it further, never lower it.
 
@@ -20,6 +23,7 @@ colour on screen and the timer always agree.
 """
 
 from access_scoring import apply_access_weighting
+from language_check import check_readable
 from safety_net import check_safety_net
 
 URGENCY_LEVELS = ["low", "medium", "high", "critical"]
@@ -65,6 +69,13 @@ def decide_priority(text: str, access_status: str, llm_result: dict | None, base
     elif safety["floor"]:
         steps.append(f"{safety['reason']} (Already at or above the floor.)")
 
+    readable = check_readable(text)
+    if not readable["readable"]:
+        raised = _max(floored, "high")
+        steps.append(readable["reason"] + (f" Raised '{floored}' → '{raised}' so a person reads it in full."
+                                           if raised != floored else " (Already at or above 'high'.)"))
+        floored = raised
+
     access = apply_access_weighting(floored, access_status)
     final = access["access_adjusted_priority"]
     steps.append(access["reason"])
@@ -82,6 +93,7 @@ def decide_priority(text: str, access_status: str, llm_result: dict | None, base
         "safety_floor": safety["floor"],
         "safety_signals": safety["signals"],
         "after_safety_net": floored,
+        "language_flag": not readable["readable"],
         "access_adjusted_priority": final,
         "access_reason": access["reason"],
         "degraded": not llm_ok,

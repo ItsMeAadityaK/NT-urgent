@@ -953,5 +953,20 @@
   "urgency_score": "medium",
   "flag_reason": "Ongoing noise complaint from a neighbouring property, reported three times this week with no response. It affects daily life and needs follow-up, but there is no indication of a safety risk or vulnerability.",
   "model": "claude-sonnet-5-5"
+ },
+ "0c8ff044e987979f43939424e51571c46ec861d8": {
+  "urgency_score": "critical",
+  "flag_reason": "Elderly relative has fallen and cannot get up (possible injury, medical emergency), with an unreliable phone line and a flooded road that may block access or emergency response. Vulnerable person, isolation and no clear alternatives. Needs immediate officer attention and emergency services referral.",
+  "model": "claude-sonnet-5-5"
+ },
+ "c83008b3f06e1648bd7c8178b909da6a0143b5a2": {
+  "urgency_score": "medium",
+  "flag_reason": "Message is largely unintelligible (appears to be garbled or substituted text), so its substance cannot be determined. Fragments such as 'ovkitowlu' and 'ntaamum' may hint at an emergency or a problem, but nothing can be verified. Escalated above low because the content cannot be ruled out as a genuine request for help; officer should review the original and try to contact the sender to clarify.",
+  "model": "claude-sonnet-5-5"
+ },
+ "489500971484c8328a256a52629cdc25971de3da": {
+  "urgency_score": "low",
+  "flag_reason": "Message describes itself as a stress test about a leaking tap; no indication of danger, vulnerability, or time-critical need. Routine maintenance-type issue, though it may be a test submission rather than a genuine enquiry.",
+  "model": "claude-sonnet-5-5"
  }
 }

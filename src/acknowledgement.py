@@ -50,6 +50,16 @@ def draft_acknowledgement(message_id: str, priority: str, category: str, team: s
         note = ("SAFETY-AWARE WORDING: the draft deliberately does not repeat what was reported, in case "
                 "someone else reads this device. Phone the sender first; only send a written reply if a call "
                 "is not possible or safe.")
+    elif category == "Language not recognised":
+        draft = (f"We have received your message (ref {ref}). An officer will contact you today, with an interpreter "
+                 f"if you would like one. If anyone is in danger, call 000."
+                 if short else
+                 f"Thank you for contacting us. We have received your message (ref {ref}). We could not read it fully "
+                 f"and an officer will contact you today, with an interpreter if you would like one. If anyone is in "
+                 f"danger, please call 000.")
+        note = ("The system could NOT read this message, so this draft says nothing about its content. Read it yourself "
+                "or get an interpreter (for example through the NT Aboriginal Interpreter Service) before replying. "
+                "Phone first if you can.")
     elif priority == "critical":
         draft = (f"We have your message (ref {ref}) and a duty officer has it now. "
                  f"If anyone is in immediate danger, call 000."

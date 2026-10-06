@@ -142,6 +142,41 @@ written or reviewed by a speaker or interpreter:
 
 ---
 
+## Text the system can't read (other languages)
+
+Every layer of the triage works on English, so a message in Kriol or a traditional language looks like
+noise, and noise would normally rank LOW. `src/language_check.py` closes that hole: if a message is mostly
+words the system doesn't know *and* has almost none of the little connecting words of English (the, is, my),
+it can never rank below **high**, is flagged "language not recognised", is routed to an *Interpreter &
+community liaison* desk, and gets a draft that says nothing about its content. It only ever raises a priority.
+It does not know which language it is looking at, and very short messages are not judged.
+
+- **We do not write any Aboriginal language.** `data/language_standins.py` makes *invented* letter-swap text
+  (clearly not a real language) to test the mechanism, paired with the English each one stands in for.
+- `python scripts/language_parity.py` runs the test with the LLM off: before the rule, 8 of 8 urgent
+  stand-in messages were ranked below high; after it, 0 of 8. The cost: routine messages in an unreadable
+  language are also raised to high, because nobody can tell routine from urgent in a language we can't read.
+- **Real phrases** go in `data/community_phrases.json`, written or reviewed by a speaker or interpreter, each
+  with its `english_meaning`. They flow through the same test, and the script flags any real phrase ranked lower
+  than its English meaning.
+- **Fair to ordinary English:** no flag on 3,460 hand-written, typo-heavy and fresh English messages (tested).
+
+## Real inbound messages
+
+`POST /api/ingest` is where a real channel plugs in: an SMS gateway (a Twilio-style webhook posts `Body` and
+`From`), an email forwarder, or a web form. The message is triaged by the same pipeline and appears in the
+queue within a few seconds (the page checks every 4 seconds, which costs nothing). Set `INGEST_TOKEN` to
+require an `X-Ingest-Token` header.
+
+```bash
+curl -X POST http://127.0.0.1:5050/api/ingest -H "Content-Type: application/json"   -d '{"text":"my nan fell and cant get up, road is flooded","channel":"sms","from":"+61400111222","location":"Wadeye","access_status":"cut-off"}'
+```
+
+Not built (and said so plainly): connecting an actual SMS number or mailbox, a real wall-clock instead of the
+simulated clock, and saving officer actions to a database (they live in memory and reset on restart).
+
+---
+
 ## How to run it
 
 ```bash
@@ -173,7 +208,7 @@ Run the tests:
 python3 -m pytest -q
 ```
 
-78 tests cover the safety guarantees (nothing lowers a priority, prompt injection can't bury a
+93 tests cover the safety guarantees (nothing lowers a priority, prompt injection can't bury a
 flagged message, every critical message survives an LLM outage on the benchmark, escalation climbs,
 drafts always need approval, no module imports a message-sending library) and the generated shifts
 (replayable, varied, contain the demo cases, hidden labels never affect priority). Tests never call
@@ -221,11 +256,13 @@ src/dropout_detector.py   "Sender went silent" detection
 src/explain.py            One-line "Why:" for each item
 src/evaluation.py         Recall-first scoring against ground truth
 src/generator.py          Seeded random shifts: scenarios x style x noise, hidden answer key
+src/language_check.py     Can the system read this message? Unreadable text never ranks below high
 scripts/run_llm_batch.py  One-off real Claude run over the dataset
 data/messages.py          152 hand-written messages: baseline training data + independent benchmark
 static/                   Hand-built dispatch-console frontend
 tests/test_safety.py      Safety-guarantee tests
-tests/test_shift.py       Generated-shift tests (replay, variety, demo cases, no leakage)
+tests/test_shift.py       Generated-shift tests (replay, variety, demo cases, no leakage, credit guard)
+tests/test_language.py    Unreadable-language and inbound-endpoint tests
 ```
 
 ---

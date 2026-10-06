@@ -52,7 +52,9 @@ from dropout_detector import check_dropout  # noqa: E402
 from escalation import check_escalation_timeout  # noqa: E402
 from evaluation import score  # noqa: E402
 from explain import headline  # noqa: E402
-from generator import DEFAULT_SIZE as SHIFT_SIZE, generate_shift  # noqa: E402
+from generator import (ALL_CLEAR, ALL_CLEAR_FORMAL, DEFAULT_SIZE as SHIFT_SIZE, SCENARIOS,  # noqa: E402
+                       generate_shift)
+import language_check  # noqa: E402
 from messages import SIMULATION_START, get_sample_messages  # noqa: E402
 from routing import route_message  # noqa: E402
 from safety_net import check_safety_net  # noqa: E402
@@ -85,6 +87,7 @@ WELFARE_ROLES = ("Officer", "Shift supervisor", "Duty manager")
 _submitted = []
 _submitted_static = {True: {}, False: {}}
 _submit_counter = [0]
+_LAST_MINUTE = [60]  # the sim minute the screen last asked about
 
 # ---------------------------------------------------------------------------
 # Static, clock-independent work done once at startup.
@@ -95,6 +98,14 @@ _BASELINE_EVAL = train_baseline_from_dataset(
     [m["true_urgency"] for m in _MESSAGES],
 )
 _BASELINE_OOF = dict(zip((m["message_id"] for m in _MESSAGES), _BASELINE_EVAL["oof_predictions"]))
+
+# Teach the readability check what ordinary messages look like (so text in a language this
+# system cannot read is never ranked low). See src/language_check.py.
+language_check.configure(
+    [m["raw_text"] for m in _MESSAGES]
+    + [t for sc in SCENARIOS for t in sc["informal"] + sc["formal"]] + ALL_CLEAR + ALL_CLEAR_FORMAL
+    + ["mum dad nan pop aunty uncle brother kids little ones young children baby small days hours"]
+)
 
 
 def _load_llm_results():
@@ -130,7 +141,7 @@ def _finish_triage(msg: dict, llm: dict) -> dict:
     if baseline is None:
         baseline = classify_urgency_baseline(msg["raw_text"])["urgency_score"]
     decision = decide_priority(msg["raw_text"], msg["access_status"], llm, baseline)
-    route = route_message(msg["raw_text"], decision["access_adjusted_priority"])
+    route = route_message(msg["raw_text"], decision["access_adjusted_priority"], unreadable=decision["language_flag"])
     draft = draft_acknowledgement(msg["message_id"], decision["access_adjusted_priority"],
                                   route["category"], route["team"], msg["channel"])
     return {"llm": llm, "decision": decision, "route": route, "draft": draft, "baseline_urgency": baseline}
@@ -411,10 +422,11 @@ def _arrival_minute(msg) -> int:
 # ---------------------------------------------------------------------------
 def _build_state(minutes_elapsed: int, llm_online: bool):
     minutes_elapsed = max(0, min(SIM_MAX_MINUTES, minutes_elapsed))
+    _LAST_MINUTE[0] = minutes_elapsed
     current_time = SIMULATION_START + timedelta(minutes=minutes_elapsed)
-    static = {**_ACTIVE["static"][llm_online], **_submitted_static[llm_online]}
     all_messages = _ACTIVE["messages"] + _submitted
-    arrived = [m for m in all_messages if m["timestamp"] <= current_time]
+    static = {**_ACTIVE["static"][llm_online], **_submitted_static[llm_online]}
+    arrived = [m for m in all_messages if m["message_id"] in static and m["timestamp"] <= current_time]
 
     # Sender histories for dropout detection, using the triaged content
     # urgency (content + safety floor) as the detector's urgency_score.
@@ -634,7 +646,7 @@ def api_classify():
 
     baseline = classify_urgency_baseline(text)
     decision = decide_priority(text, access, llm, baseline["urgency_score"])
-    route = route_message(text, decision["access_adjusted_priority"])
+    route = route_message(text, decision["access_adjusted_priority"], unreadable=decision["language_flag"])
     draft = draft_acknowledgement("NEW", decision["access_adjusted_priority"], route["category"], route["team"], channel)
     timeout = check_escalation_timeout(
         {"urgency_score": decision["access_adjusted_priority"], "timestamp": SIMULATION_START, "acknowledged": False},
@@ -655,39 +667,82 @@ def api_classify():
     })
 
 
-@app.post("/api/submit")
-def api_submit():
-    """'Add to queue' from the 'Try a message' tab — same text just triaged
-    by /api/classify, now actually saved as a live item at the current sim
-    minute. Kept separate from _MESSAGES: it never touches the 152-message
-    evaluation/fairness dataset, so trying things live can't move those numbers."""
-    body = _body()
-    text = (body.get("text") or "").strip()
-    if not text:
-        return jsonify({"error": "text required"}), 400
-    minute = _minutes(body.get("minutes"))
-
+def _enqueue(text: str, channel: str, access: str, minute: int, sender_id=None,
+             location: str = "Submitted live (Try a Message)") -> str:
+    """Put one message into the live queue at `minute` and triage it (both LLM views)."""
     _submit_counter[0] += 1
     mid = f"NEW{_submit_counter[0]:03d}"
     msg = {
         "message_id": mid,
         "timestamp": SIMULATION_START + timedelta(minutes=minute),
-        "channel": body.get("channel", "sms"),
-        "sender_id": f"try-a-message-{mid}",
+        "channel": channel,
+        "sender_id": sender_id or f"try-a-message-{mid}",
         "raw_text": text,
-        "location": "Submitted live (Try a Message)",
-        "access_status": body.get("access_status", "normal"),
+        "location": location,
+        "access_status": access,
         "true_urgency": None,
         "fairness_pair": None,
         "fairness_style": None,
     }
-    _submitted.append(msg)
+    results = {mode: _triage_submitted(msg, mode) for mode in (True, False)}  # slow part first (may call Claude)
     for mode in (True, False):
-        _submitted_static[mode][mid] = _triage_submitted(msg, mode)
+        _submitted_static[mode][mid] = results[mode]
+    _submitted.append(msg)  # only now can a request reading the queue see it, triage already in place
+    return mid
+
+
+@app.post("/api/submit")
+def api_submit():
+    """'Add to queue' from the 'Try a message' tab — same text just triaged
+    by /api/classify, now actually saved as a live item at the current sim
+    minute. Kept separate from the evaluation dataset: it never touches the
+    scored messages, so trying things live can't move those numbers."""
+    body = _body()
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    minute = _minutes(body.get("minutes"))
+    mid = _enqueue(text, body.get("channel", "sms"), body.get("access_status", "normal"), minute)
 
     state = _build_state(minute, _llm_flag(body.get("llm", "on")))
     state["submitted_id"] = mid
     return jsonify(state)
+
+
+INGEST_TOKEN = os.environ.get("INGEST_TOKEN", "")  # if set, callers must send it as X-Ingest-Token
+
+
+@app.post("/api/ingest")
+def api_ingest():
+    """Where a real channel plugs in. An SMS gateway (e.g. a Twilio webhook, which posts `Body`
+    and `From`), an email forwarder or a web form POSTs a message here; it is triaged by the same
+    pipeline as everything else and appears in the queue within a few seconds (the page polls).
+
+    JSON or form fields: text (or Body/body), channel (sms/email/webform/phone), from (or From),
+    location, access_status. Set INGEST_TOKEN to require a shared secret header."""
+    if INGEST_TOKEN and request.headers.get("X-Ingest-Token") != INGEST_TOKEN:
+        return jsonify({"error": "missing or wrong X-Ingest-Token"}), 401
+    data = request.get_json(force=True, silent=True) or request.form.to_dict() or {}
+    text = str(data.get("text") or data.get("Body") or data.get("body") or "").strip()
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    channel = str(data.get("channel") or ("sms" if "Body" in data else "webform")).lower()
+    if channel not in ("sms", "email", "webform", "phone"):
+        channel = "webform"
+    access = data.get("access_status") if data.get("access_status") in ("normal", "limited", "cut-off") else "normal"
+    sender = str(data.get("from") or data.get("From") or "").strip()[:60] or None
+    location = str(data.get("location") or "").strip()[:60] or "Inbound (location unknown)"
+
+    minute = _LAST_MINUTE[0]
+    mid = _enqueue(text, channel, access, minute, sender_id=sender, location=location)
+    s = _submitted_static[True][mid]
+    return jsonify({
+        "message_id": mid,
+        "priority": s["decision"]["access_adjusted_priority"],
+        "team": s["route"]["team"],
+        "language_not_recognised": s["decision"]["language_flag"],
+        "queued_at_sim_minute": minute,
+    }), 201
 
 
 @app.get("/")
@@ -697,4 +752,7 @@ def index():
 
 if __name__ == "__main__":
     # Default 5050, not 5000: on macOS, port 5000 is taken by AirPlay Receiver.
-    app.run(debug=True, port=int(os.environ.get("PORT", 5050)))
+    # The auto-reloader ignores installed libraries: a pip install in another window must never
+    # restart a running demo (a restart wipes acknowledgements and drops connections).
+    app.run(debug=True, port=int(os.environ.get("PORT", 5050)),
+            exclude_patterns=["*/site-packages/*", r"*\site-packages\*", "*/.git/*"])

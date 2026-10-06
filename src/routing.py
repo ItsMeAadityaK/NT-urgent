@@ -75,11 +75,22 @@ _COMPILED = [(cat, team, [re.compile(p) for p in pats]) for cat, team, pats in R
 DEFAULT_ROUTE = ("General enquiries", "Customer service")
 
 
-def route_message(text: str, priority: str = None) -> dict:
+def route_message(text: str, priority: str = None, unreadable: bool = False) -> dict:
     """
     Returns:
         dict: {"category", "team", "cc_duty_officer": bool, "matched", "reason"}
     """
+    if unreadable:
+        # Keyword rules can't read it, so don't pretend to route by keyword.
+        team = "Interpreter & community liaison"
+        cc = priority == "critical"
+        reason = (f"Routed to {team}: the language was not recognised, so a person reads it in full and arranges "
+                  f"an interpreter if needed.")
+        if cc:
+            reason += " Critical priority, so the Duty Officer is copied in as first responder."
+        return {"category": "Language not recognised", "team": team, "cc_duty_officer": cc, "matched": None,
+                "reason": reason}
+
     t = (text or "").lower().replace("’", "'")
     category, team, matched = DEFAULT_ROUTE[0], DEFAULT_ROUTE[1], None
     for cat, tm, patterns in _COMPILED:
