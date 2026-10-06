@@ -56,6 +56,8 @@ const state = {
   priorityFilter: "",
   welfareForm: null,                                   // sender_id whose "log welfare check" form is open
   welfareDraft: { logged_by: "Officer", note: "" },    // survives re-renders while the form is open
+  role: "Officer",          // "Acting as": stamped on every action, and sets whose desk the alert panel shows
+  activityFilter: "",       // Activity Log: "" = everyone, else one actor
   data: null,
 };
 
@@ -90,7 +92,7 @@ async function api(path, body) {
   const res = await fetch(path, opts);
   return res.json();
 }
-const common = () => ({ minutes: state.minutes, llm: state.llmOnline ? "on" : "off" });
+const common = () => ({ minutes: state.minutes, llm: state.llmOnline ? "on" : "off", role: state.role });
 
 async function fetchState() {
   applyState(await api(`/api/state?minutes=${state.minutes}&llm=${state.llmOnline ? "on" : "off"}`));
@@ -102,9 +104,10 @@ async function approveDraft(id) {
   applyState(await api("/api/approve_draft", { message_id: id, ...common() }));
 }
 async function logWelfare(senderId) {
-  const { logged_by, note } = state.welfareDraft;
+  const logged_by = state.role;
+  const { note } = state.welfareDraft;
   state.welfareForm = null;
-  state.welfareDraft = { logged_by: "Officer", note: "" };
+  state.welfareDraft = { logged_by: state.role, note: "" };
   applyState(await api("/api/welfare_check", { sender_id: senderId, logged_by, note, ...common() }));
 }
 async function submitToQueue(payload) {
@@ -158,6 +161,8 @@ function render() {
   if (state.view === "fairness") renderFairness();
   if (state.view === "acked") renderAcked();
   if (state.view === "welfare") renderWelfare();
+  if (state.view === "activity") renderActivity();
+  el("activityTabCount").textContent = (state.data.activity_log || []).filter((e) => e.actor !== "System").length;
   el("ackTabCount").textContent = state.data.messages.filter((m) => m.acknowledged).length;
   el("welfareTabCount").textContent = (state.data.welfare_log || []).length;
 }
@@ -199,10 +204,35 @@ function renderShiftNote() {
 }
 
 // ---------- Needs a human now ----------
+// Whose desk the panel shows, from "Acting as". The officer (front line) sees
+// everything overdue plus silent senders; the supervisor and duty manager see only
+// what the escalation chain has handed to them right now.
+const ROLE_DESKS = {
+  "Officer": {
+    title: "",
+    sub: "auto-escalated past their limit, or senders who went quiet \u2014 the system never replies itself, it only escalates to people",
+    empty: "Nothing is waiting past its limit. Every urgent item has been picked up by an officer.",
+    includes: (m) => (m.should_escalate && !m.acknowledged) || m.dropout_flag,
+  },
+  "Shift supervisor": {
+    title: " \u00b7 SHIFT SUPERVISOR'S DESK",
+    sub: "items an officer didn't pick up in time, now escalated to you. If you don't act, they go to the duty manager next.",
+    empty: "Nothing has been escalated to the shift supervisor right now.",
+    includes: (m) => m.should_escalate && !m.acknowledged && m.escalation_level === 1,
+  },
+  "Duty manager": {
+    title: " \u00b7 DUTY MANAGER'S DESK",
+    sub: "items still unacknowledged at twice their time limit \u2014 the end of the escalation chain.",
+    empty: "Nothing has escalated all the way to the duty manager. The chain below is holding.",
+    includes: (m) => m.should_escalate && !m.acknowledged && m.escalation_level === 2,
+  },
+};
+
 function renderAttention() {
   const msgs = state.data.messages;
+  const desk = ROLE_DESKS[state.role];
   const items = msgs
-    .filter((m) => (m.should_escalate && !m.acknowledged) || m.dropout_flag)
+    .filter(desk.includes)
     .sort((a, b) => b.escalation_level - a.escalation_level ||
       URGENCY_ORDER[a.access_adjusted_priority] - URGENCY_ORDER[b.access_adjusted_priority] ||
       b.waited_minutes - a.waited_minutes);
@@ -210,8 +240,8 @@ function renderAttention() {
   const panel = el("attention");
   if (items.length === 0) {
     panel.className = "attention clear";
-    panel.innerHTML = `<div class="attention-title">NEEDS A HUMAN NOW <span class="count">0</span></div>
-      <p class="view-note">Nothing is waiting past its limit. Every urgent item has been picked up by an officer.</p>`;
+    panel.innerHTML = `<div class="attention-title">NEEDS A HUMAN NOW${desk.title} <span class="count">0</span></div>
+      <p class="view-note">${desk.empty}</p>`;
     return;
   }
   // Every item is listed in a scrollable box. The panel re-renders on each
@@ -220,8 +250,8 @@ function renderAttention() {
   const prevScroll = prevList ? prevList.scrollTop : 0;
   panel.className = "attention";
   panel.innerHTML = `
-    <div class="attention-title">NEEDS A HUMAN NOW <span class="count">${items.length}</span>
-      <span class="attention-sub">auto-escalated past their limit, or senders who went quiet — the system never replies itself, it only escalates to people</span></div>
+    <div class="attention-title">NEEDS A HUMAN NOW${desk.title} <span class="count">${items.length}</span>
+      <span class="attention-sub">${desk.sub}</span></div>
     <div class="attention-list" tabindex="0" aria-label="Items needing a human">
     ${items.map((m) => `
       <div class="attention-row" style="--row-color:${URGENCY_COLOR[m.access_adjusted_priority]}">
@@ -361,7 +391,7 @@ function renderRow(m) {
   if (m.second_opinion) flags += `<span class="flag-tag muted">&#9670; 2ND OPINION DIFFERS</span>`;
 
   let timer = "";
-  if (m.acknowledged) timer = `<span class="timer ok">acknowledged +${m.ack_minute - m.arrival_minute}m after arrival</span>`;
+  if (m.acknowledged) timer = `<span class="timer ok">acknowledged +${m.ack_minute - m.arrival_minute}m after arrival${m.acknowledged_by ? ` by ${escapeHtml(m.acknowledged_by)}` : ""}</span>`;
   else if (m.sla_minutes != null) {
     const left = m.sla_minutes - m.waited_minutes;
     timer = left >= 0
@@ -416,7 +446,6 @@ function renderRow(m) {
 }
 
 // ---------- Welfare checks ----------
-const WELFARE_ROLES = ["Officer", "Shift supervisor", "Duty manager"];
 
 // The LOG WELFARE CHECK button, or (once clicked) a small form recording who is
 // logging it and an optional note. Lives only in the "Needs a human now" panel.
@@ -427,9 +456,7 @@ function welfareControl(senderId) {
   }
   const d = state.welfareDraft;
   return `<div class="welfare-form">
-    <label>Logged by
-      <select data-wf-role>${WELFARE_ROLES.map((r) => `<option ${r === d.logged_by ? "selected" : ""}>${r}</option>`).join("")}</select>
-    </label>
+    <span class="wf-as">Logging as <strong>${escapeHtml(state.role)}</strong> <span class="wf-hint">(change with Acting as, above)</span></span>
     <input data-wf-note maxlength="300" value="${escapeHtml(d.note)}" placeholder="Note (optional), e.g. police patrol asked to attend">
     <div class="welfare-form-actions">
       <button class="ack-btn warn" data-wf-save="${sid}">SAVE</button>
@@ -440,6 +467,46 @@ function welfareControl(senderId) {
 
 // The Welfare Checks tab is a log of checks already made. Senders still awaiting a
 // check are shown (and actioned) in one place only: the "Needs a human now" panel.
+// ---------- Activity log ----------
+// The audit trail: who did what, when, plus every automatic escalation.
+const ACTIVITY_KINDS = {
+  escalated: { icon: "&#9650;", label: "ESCALATED" },
+  acknowledged: { icon: "&#10003;", label: "ACKNOWLEDGED" },
+  approved: { icon: "&#9993;", label: "APPROVED REPLY" },
+  welfare: { icon: "&#9679;", label: "WELFARE CHECK" },
+};
+const ACTORS = ["System", "Officer", "Shift supervisor", "Duty manager"];
+const actorClass = (a) => "actor-" + a.toLowerCase().replace(/\s+/g, "-");
+
+function renderActivity() {
+  const log = state.data.activity_log || [];
+  const count = (a) => log.filter((e) => !a || e.actor === a).length;
+
+  el("activityFilter").innerHTML = ["", ...ACTORS].map((a) => `
+    <button class="chip ${state.activityFilter === a ? "active" : ""}" data-actor="${a}">
+      ${a || "Everyone"} <span class="chip-count">${count(a)}</span>
+    </button>`).join("");
+  el("activityFilter").querySelectorAll("[data-actor]").forEach((b) => b.addEventListener("click", () => {
+    state.activityFilter = b.dataset.actor;
+    renderActivity();
+  }));
+
+  const shown = log.filter((e) => !state.activityFilter || e.actor === state.activityFilter);
+  el("activityList").innerHTML = shown.length
+    ? shown.map((e) => {
+      const k = ACTIVITY_KINDS[e.kind];
+      return `<div class="activity-row" style="--row-color:${URGENCY_COLOR[e.priority]}">
+        <span class="mono activity-time">${fmtTime(e.time)}</span>
+        <span class="actor-badge ${actorClass(e.actor)}">${escapeHtml(e.actor)}</span>
+        <span class="activity-kind">${k.icon} ${k.label}</span>
+        <span class="activity-msg">${tag(e.priority)} <span class="mono">${e.message_id}</span>
+          <span class="activity-text">${escapeHtml(e.raw_text.length > 80 ? e.raw_text.slice(0, 80) + "\u2026" : e.raw_text)}</span></span>
+        <span class="activity-detail">${escapeHtml(e.detail)}</span>
+      </div>`;
+    }).join("")
+    : `<p class="view-note">${state.activityFilter ? `Nothing by ${escapeHtml(state.activityFilter)} yet.` : "Nothing has happened yet \u2014 advance the clock or act on a message."}</p>`;
+}
+
 function renderWelfare() {
   const log = state.data.welfare_log || [];
   el("welfareLoggedCount").textContent = log.length;
@@ -471,11 +538,8 @@ function bindActions(root) {
   root.querySelectorAll("[data-welfare-open]").forEach((b) => b.addEventListener("click", () => {
     if (state.playing) togglePlay();  // stop the clock while the officer fills in the form
     state.welfareForm = b.dataset.welfareOpen;
-    state.welfareDraft = { logged_by: "Officer", note: "" };
+    state.welfareDraft = { logged_by: state.role, note: "" };
     render();
-  }));
-  root.querySelectorAll("[data-wf-role]").forEach((sel) => sel.addEventListener("change", (e) => {
-    state.welfareDraft.logged_by = e.target.value;
   }));
   root.querySelectorAll("[data-wf-note]").forEach((inp) => inp.addEventListener("input", (e) => {
     state.welfareDraft.note = e.target.value;
@@ -767,6 +831,11 @@ el("clockSlider").addEventListener("input", (e) => {
 });
 el("playBtn").addEventListener("click", togglePlay);
 el("resetBtn").addEventListener("click", resetAcks);
+el("roleSelect").addEventListener("change", (e) => {
+  state.role = e.target.value;
+  state.welfareForm = null;
+  render();
+});
 el("newShiftBtn").addEventListener("click", () => newShift("shift"));
 el("seedInput").addEventListener("keydown", (e) => { if (e.key === "Enter") newShift("shift"); });
 el("llmBtn").addEventListener("click", () => {

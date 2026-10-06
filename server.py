@@ -74,9 +74,13 @@ app = Flask(__name__, static_folder="static", static_url_path="")
 _acks = {}             # message_id -> minute acknowledged
 _draft_approvals = {}  # message_id -> minute approved
 _welfare_checks = {}   # sender_id  -> {"minute", "logged_by", "note"} for a logged welfare check
+_acted_by = {}         # (action, message_id) -> role that did it, for "acknowledge" / "approve"
 
-# Who can log a welfare check. Recorded so the log shows who took responsibility.
-WELFARE_ROLES = ("Officer", "Shift supervisor", "Duty manager")
+# The people in the escalation chain. Every officer action records which of them
+# did it ("Acting as" in the UI), so the Activity Log is an audit trail of who
+# acted on what, and when.
+ROLES = ("Officer", "Shift supervisor", "Duty manager")
+WELFARE_ROLES = ROLES
 
 # Messages added live from the "Try a Message" tab via "Add to queue".
 # Kept separate from _MESSAGES (the fixed, reproducible 152-message
@@ -200,6 +204,7 @@ def _reset_actions():
     _acks.clear()
     _draft_approvals.clear()
     _welfare_checks.clear()
+    _acted_by.clear()
     _submitted.clear()
     _submitted_static[True].clear()
     _submitted_static[False].clear()
@@ -413,6 +418,59 @@ def _welfare_log(arrived: list, static: dict, minutes_elapsed: int) -> list:
     return sorted(log, key=lambda e: -e["minute"])
 
 
+def _activity_log(arrived: list, static: dict, minutes_elapsed: int) -> list:
+    """Audit trail up to the current sim minute, newest first: every officer action
+    (who, what, when) plus every automatic escalation the system made. Derived from
+    the action stores rather than appended, so scrubbing the clock back hides
+    actions that haven't happened yet, the same way the queue does."""
+    events = []
+
+    def add(minute, actor, kind, msg, detail):
+        events.append({
+            "minute": minute,
+            "time": (SIMULATION_START + timedelta(minutes=minute)).isoformat(),
+            "actor": actor,
+            "kind": kind,
+            "message_id": msg["message_id"],
+            "sender_id": msg["sender_id"],
+            "priority": static[msg["message_id"]]["decision"]["access_adjusted_priority"],
+            "raw_text": msg["raw_text"],
+            "detail": detail,
+        })
+
+    by_id = {m["message_id"]: m for m in arrived}
+    for msg in arrived:
+        mid = msg["message_id"]
+        arrival = _arrival_minute(msg)
+        priority = static[mid]["decision"]["access_adjusted_priority"]
+        ack = _acks.get(mid)
+        sla = check_escalation_timeout(
+            {"urgency_score": priority, "timestamp": msg["timestamp"], "acknowledged": False}, msg["timestamp"],
+        )["sla_minutes"]
+        if sla is not None:
+            # escalation fires once the wait EXCEEDS the limit, and only if nobody had acknowledged by then
+            for level, target, at in ((1, "Shift supervisor", arrival + sla + 1), (2, "Duty manager", arrival + 2 * sla + 1)):
+                if at <= minutes_elapsed and (ack is None or ack > at):
+                    add(at, "System", "escalated", msg,
+                        f"Not acknowledged within {sla if level == 1 else 2 * sla} min \u2014 escalated to {target}.")
+        if ack is not None and ack <= minutes_elapsed:
+            add(ack, _acted_by.get(("acknowledge", mid), "Officer"), "acknowledged", msg,
+                f"Acknowledged {ack - arrival} min after it arrived.")
+        approved = _draft_approvals.get(mid)
+        if approved is not None and approved <= minutes_elapsed:
+            add(approved, _acted_by.get(("approve", mid), "Officer"), "approved", msg,
+                "Approved and sent the drafted acknowledgement.")
+
+    for entry in _welfare_log(arrived, static, minutes_elapsed):
+        msg = by_id[entry["message_id"]]
+        note = f" Note: {entry['note']}" if entry["note"] else ""
+        add(entry["minute"], entry["logged_by"], "welfare", msg,
+            f"Logged a welfare check after {entry['silent_minutes']} min of silence.{note}")
+
+    order = {"escalated": 0, "acknowledged": 1, "approved": 2, "welfare": 3}
+    return sorted(events, key=lambda e: (-e["minute"], -order[e["kind"]]))
+
+
 def _arrival_minute(msg) -> int:
     return int((msg["timestamp"] - SIMULATION_START).total_seconds() // 60)
 
@@ -493,6 +551,8 @@ def _build_state(minutes_elapsed: int, llm_online: bool):
             "draft_approved": draft_approved,
             "acknowledged": acknowledged,
             "ack_minute": ack_minute if acknowledged else None,
+            "acknowledged_by": _acted_by.get(("acknowledge", mid)) if acknowledged else None,
+            "draft_approved_by": _acted_by.get(("approve", mid)) if draft_approved else None,
             "should_escalate": escalation["should_escalate"],
             "escalation_level": escalation["level"],
             "escalate_to": escalation["escalate_to"],
@@ -523,6 +583,8 @@ def _build_state(minutes_elapsed: int, llm_online: bool):
 
     return {
         "welfare_log": _welfare_log(arrived, static, minutes_elapsed),
+        "activity_log": _activity_log(arrived, static, minutes_elapsed),
+        "roles": list(ROLES),
         "current_time": current_time.isoformat(),
         "minutes_elapsed": minutes_elapsed,
         "sim_max_minutes": SIM_MAX_MINUTES,
@@ -563,10 +625,18 @@ def _llm_flag(value) -> bool:
     return str(value).lower() not in ("off", "false", "0")
 
 
-def _record(store: dict, key: str, minute: int):
+def _role(body) -> str:
+    return body.get("role") if body.get("role") in ROLES else "Officer"
+
+
+def _record(store: dict, key: str, minute: int, action: str = None, role: str = None):
     """Record when an officer action happened. Keep the EARLIEST time: if the demo
-    clock was scrubbed back and the action repeated earlier, the earlier one stands."""
-    store[key] = min(store.get(key, minute), minute)
+    clock was scrubbed back and the action repeated earlier, the earlier one stands
+    (and so does the role of whoever did it at that earlier time)."""
+    if key not in store or minute < store[key]:
+        store[key] = minute
+        if action:
+            _acted_by[(action, key)] = role or "Officer"
 
 
 def _state_from_body(body):
@@ -583,7 +653,7 @@ def api_acknowledge():
     body = _body()
     if not body.get("message_id"):
         return jsonify({"error": "message_id required"}), 400
-    _record(_acks, body["message_id"], _minutes(body.get("minutes")))
+    _record(_acks, body["message_id"], _minutes(body.get("minutes")), "acknowledge", _role(body))
     return _state_from_body(body)
 
 
@@ -593,8 +663,9 @@ def api_approve_draft():
     if not body.get("message_id"):
         return jsonify({"error": "message_id required"}), 400
     minute = _minutes(body.get("minutes"))
-    _record(_draft_approvals, body["message_id"], minute)
-    _record(_acks, body["message_id"], minute)  # approving a reply implies the officer has it
+    _record(_draft_approvals, body["message_id"], minute, "approve", _role(body))
+    # approving a reply implies the officer has it
+    _record(_acks, body["message_id"], minute, "acknowledge", _role(body))
     return _state_from_body(body)
 
 
@@ -604,7 +675,7 @@ def api_welfare_check():
     if not body.get("sender_id"):
         return jsonify({"error": "sender_id required"}), 400
     minute = _minutes(body.get("minutes"))
-    logged_by = body.get("logged_by") if body.get("logged_by") in WELFARE_ROLES else "Officer"
+    logged_by = body.get("logged_by") if body.get("logged_by") in ROLES else _role(body)
     note = str(body.get("note") or "").strip()[:300]
     existing = _welfare_checks.get(body["sender_id"])
     # Keep the earliest check (same rule as acknowledgements: scrubbing the demo
