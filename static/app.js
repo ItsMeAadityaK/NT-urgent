@@ -17,7 +17,7 @@ const LOCATIONS = {
   "Palmerston": { x: 320, y: 75 },
   "Humpty Doo": { x: 350, y: 115 },
   "Batchelor": { x: 240, y: 130 },
-  "Jabiru": { x: 415, y: 85 },
+  "Jabiru": { x: 470, y: 62 },
   "Daly River area": { x: 165, y: 175 },
   "Peppimenarti": { x: 105, y: 210 },
   "Wadeye": { x: 55, y: 240 },
@@ -58,8 +58,12 @@ const state = {
   welfareDraft: { logged_by: "Officer", note: "" },    // survives re-renders while the form is open
   role: "Officer",          // "Acting as": stamped on every action, and sets whose desk the alert panel shows
   activityFilter: "",       // Activity Log: "" = everyone, else one actor
+  search: "",
+  seen: new Set(),          // message ids already drawn, so only genuinely new rows animate in
+  fxIntro: { map: false, eval: false },   // one-off entrance animations per visit to a tab
   data: null,
 };
+const TRY_TIMERS = [];
 
 const el = (id) => document.getElementById(id);
 
@@ -129,6 +133,7 @@ async function newShift(mode = "shift") {
   btn.textContent = "GENERATING…";
   setMinutes(60);
   state.expanded.clear();
+  state.seen.clear();
   state.priorityFilter = "";
   state.teamFilter = "";
   state.activePin = null;
@@ -143,20 +148,23 @@ async function newShift(mode = "shift") {
 }
 
 function applyState(data) {
+  const prev = state.data;
   state.data = data;
   el("clockValue").textContent = fmtTime(data.current_time);
   el("clockDate").textContent = fmtDate(data.current_time);
   render();
+  if (typeof notifyArrivals === "function") notifyArrivals(prev, data);
 }
 
 function render() {
   if (!state.data) return;
-  renderLlmStatus();
   renderShiftNote();
   renderAttention();
   renderStats();
+  if (typeof renderTimeline === "function") { renderTimeline(); renderMiniBar(); moveTabIndicator(); }
   if (state.view === "queue") renderQueue();
   if (state.view === "map") renderMap();
+  if (state.view === "journey" && typeof renderJourney === "function") renderJourney();
   if (state.view === "compare") renderCompare();
   if (state.view === "fairness") renderFairness();
   if (state.view === "acked") renderAcked();
@@ -167,37 +175,22 @@ function render() {
   el("welfareTabCount").textContent = (state.data.welfare_log || []).length;
 }
 
-// ---------- LLM status ----------
-function renderLlmStatus() {
-  const btn = el("llmBtn");
-  btn.textContent = state.llmOnline ? "LLM: ONLINE" : "LLM: OUTAGE (SIMULATED)";
-  btn.classList.toggle("outage", !state.llmOnline);
-  el("degradedBanner").hidden = state.llmOnline;
-}
-
-// ---------- Which queue is this? ----------
 function renderShiftNote() {
   const s = state.data.shift;
   if (!s) return;
+  const u = state.data.llm_usage;
+  const noKey = !state.data.llm_live_configured;
   let html;
   if (s.mode === "shift") {
-    const noKey = !state.data.llm_live_configured;
-    const llm = s.llm_ok === s.n ? "Claude has judged every message"
-      : s.llm_ok ? `Claude judged ${s.llm_ok} of ${s.n} messages`
-      : noKey ? "no API key set, so the LLM layer is off (baseline + safety net only)"
-      : "the LLM calls failed, so this shift runs on baseline + safety net only";
-    html = `<strong>LIVE SHIFT</strong> <span class="mono">seed ${s.seed}</span> &middot; ${s.n} freshly generated messages
-      &middot; true urgency is a hidden answer key, used only to score the system &middot; ${llm}
-      <button class="link-btn" id="modeSwitchBtn">use the 152-message benchmark instead</button>`;
+    const claude = s.llm_ok === s.n ? `<span class="pill ok" title="Verdicts from the AI">AI judged all ${s.n}</span>`
+      : s.llm_ok ? `<span class="pill warn">AI judged ${s.llm_ok} of ${s.n}</span>`
+      : `<span class="pill warn">${noKey ? "AI off: no API key" : "AI calls failed"}</span>`;
+    html = `<strong>LIVE SHIFT</strong> <span class="mono">seed ${s.seed}</span> &middot; ${s.n} messages
+      <span class="pill" title="The true urgency of each message is hidden and used only to score the system.">answer key hidden</span> ${claude}
+      <button class="link-btn" id="modeSwitchBtn">152-message benchmark</button>`;
   } else {
-    html = `<strong>BENCHMARK</strong> &middot; ${s.n} fixed, hand-written messages
-      <button class="link-btn" id="modeSwitchBtn">back to a fresh live shift</button>`;
-  }
-  const u = state.data.llm_usage;
-  if (state.data.llm_live_configured && u) {
-    html += `<br><span class="credit-note">Credits: Claude calls this run <strong>${u.live_calls}</strong> of ${u.limit} allowed
-      (about ${u.live_calls ? Math.max(1, Math.round(u.live_calls * 0.5)) : 0}&cent; so far). PLAY, tabs and replaying a saved seed cost nothing;
-      a never-seen seed costs about 25&cent;.</span>`;
+    html = `<strong>BENCHMARK</strong> &middot; ${s.n} fixed hand-written messages
+      <button class="link-btn" id="modeSwitchBtn">back to a live shift</button>`;
   }
   el("shiftNote").innerHTML = html;
   el("modeSwitchBtn").addEventListener("click", () => newShift(s.mode === "shift" ? "benchmark" : "shift"));
@@ -210,20 +203,20 @@ function renderShiftNote() {
 const ROLE_DESKS = {
   "Officer": {
     title: "",
-    sub: "auto-escalated past their limit, or senders who went quiet \u2014 the system never replies itself, it only escalates to people",
-    empty: "Nothing is waiting past its limit. Every urgent item has been picked up by an officer.",
+    sub: "Past their time limit, or senders who went quiet. The system only escalates to people.",
+    empty: "Nothing is overdue. Every urgent item has been picked up.",
     includes: (m) => (m.should_escalate && !m.acknowledged) || m.dropout_flag,
   },
   "Shift supervisor": {
     title: " \u00b7 SHIFT SUPERVISOR'S DESK",
-    sub: "items an officer didn't pick up in time, now escalated to you. If you don't act, they go to the duty manager next.",
-    empty: "Nothing has been escalated to the shift supervisor right now.",
+    sub: "Missed by an officer and escalated to you. If you don't act, the duty manager is next.",
+    empty: "Nothing escalated to the shift supervisor.",
     includes: (m) => m.should_escalate && !m.acknowledged && m.escalation_level === 1,
   },
   "Duty manager": {
     title: " \u00b7 DUTY MANAGER'S DESK",
-    sub: "items still unacknowledged at twice their time limit \u2014 the end of the escalation chain.",
-    empty: "Nothing has escalated all the way to the duty manager. The chain below is holding.",
+    sub: "Still unacknowledged at twice the limit. End of the escalation chain.",
+    empty: "Nothing has reached the duty manager.",
     includes: (m) => m.should_escalate && !m.acknowledged && m.escalation_level === 2,
   },
 };
@@ -268,12 +261,14 @@ function renderAttention() {
         </span>
       </div>`).join("")}
     </div>
-    ${items.length > 6 ? `<p class="view-note attention-hint">Showing all ${items.length} \u2014 scroll the list to see more.</p>` : ""}`;
+    ${items.length > 6 ? `<p class="view-note attention-hint">${items.length} items, scroll for more.</p>` : ""}`;
   panel.querySelector(".attention-list").scrollTop = prevScroll;
   bindActions(panel);
 }
 
 // ---------- Stats ----------
+// The tiles are built once and updated in place, so the numbers count up instead of flashing.
+// Each tile is also a shortcut to the thing it counts.
 function renderStats() {
   const msgs = state.data.messages;
   const open = msgs.filter((m) => !m.acknowledged);
@@ -284,19 +279,37 @@ function renderStats() {
   const tth = state.data.time_to_human.critical;
 
   const tiles = [
-    { label: "ITEMS RECEIVED", value: msgs.length, sub: `${open.length} still open`, color: "var(--accent)" },
-    { label: "OPEN CRITICAL", value: openCritical, sub: "15-min limit", color: "var(--critical)" },
-    { label: "ESCALATED", value: l1 + l2, sub: `${l1} supervisor · ${l2} duty manager`, color: "var(--high)" },
-    { label: "SENDERS GONE SILENT", value: dropout, sub: "welfare check needed", color: "var(--medium)" },
-    { label: "TIME-TO-HUMAN (CRITICAL)", value: tth ? `${tth.median}m` : "—", sub: tth ? `median of ${tth.n} acknowledged` : "none acknowledged yet", color: "var(--low)" },
+    { label: "ITEMS RECEIVED", value: msgs.length, sub: `${open.length} still open`, color: "var(--accent)", hint: "Show the full queue" },
+    { label: "OPEN CRITICAL", value: openCritical, sub: "15-min limit", color: "var(--critical)", hint: "Show open critical items" },
+    { label: "ESCALATED", value: l1 + l2, sub: `${l1} supervisor · ${l2} duty manager`, color: "var(--high)", hint: "Jump to the alert panel" },
+    { label: "SENDERS GONE SILENT", value: dropout, sub: "welfare check needed", color: "var(--medium)", hint: "Jump to the alert panel" },
+    { label: "TIME-TO-HUMAN (CRITICAL)", value: tth ? tth.median : null, suffix: "m", sub: tth ? `median of ${tth.n} acknowledged` : "none acknowledged yet", color: "var(--low)", hint: "See acknowledged items" },
   ];
 
-  el("statRow").innerHTML = tiles.map((t) => `
-    <div class="stat-tile" style="--stat-color:${t.color}">
-      <div class="num">${t.value}</div>
-      <div class="lbl">${t.label}</div>
-      <div class="sub">${t.sub}</div>
-    </div>`).join("");
+  const root = el("statRow");
+  if (root.children.length !== tiles.length) {
+    root.innerHTML = tiles.map((t, i) => `
+      <button class="stat-tile" data-stat="${i}" style="--stat-color:${t.color};--k:${i}">
+        <div class="num">0</div><div class="lbl">${t.label}</div><div class="sub"></div>
+      </button>`).join("");
+    root.querySelectorAll("[data-stat]").forEach((b) => b.addEventListener("click", () => statShortcut(+b.dataset.stat)));
+  }
+  tiles.forEach((t, i) => {
+    const tile = root.children[i];
+    const num = tile.querySelector(".num");
+    if (t.value == null) { num.dataset.v = ""; num.textContent = "—"; }
+    else if (typeof tween === "function") tween(num, t.value, t.suffix || "");
+    else num.textContent = t.value + (t.suffix || "");
+    tile.querySelector(".sub").textContent = t.sub;
+    tile.title = t.hint;
+  });
+}
+
+function statShortcut(i) {
+  if (i === 0) { state.priorityFilter = ""; state.teamFilter = ""; setView("queue"); }
+  else if (i === 1) { state.priorityFilter = "critical"; state.teamFilter = ""; setView("queue"); }
+  else if (i === 2 || i === 3) window.scrollTo({ top: 0, behavior: "smooth" });
+  else setView("acked");
 }
 
 // ---------- Queue ----------
@@ -308,7 +321,9 @@ function renderQueue() {
   teamSel.innerHTML = `<option value="">All teams</option>` +
     teams.map((t) => `<option value="${escapeHtml(t)}" ${t === current ? "selected" : ""}>${escapeHtml(t)}</option>`).join("");
 
-  const byTeam = state.teamFilter ? all.filter((m) => m.team === state.teamFilter) : all;
+  const q = state.search.trim().toLowerCase();
+  const matches = (m) => !q || `${m.message_id} ${m.raw_text} ${m.location} ${m.team} ${m.category} ${m.channel}`.toLowerCase().includes(q);
+  const byTeam = all.filter((m) => (!state.teamFilter || m.team === state.teamFilter) && matches(m));
   renderPriorityFilter(byTeam);
   const filtered = state.priorityFilter
     ? byTeam.filter((m) => m.access_adjusted_priority === state.priorityFilter)
@@ -324,13 +339,14 @@ function renderQueue() {
 
   const openList = el("queueOpenList");
   if (all.length === 0) {
-    openList.innerHTML = `<p class="view-note">No messages have arrived yet — advance the clock.</p>`;
+    openList.innerHTML = `<p class="view-note">No messages yet. Advance the clock.</p>`;
   } else if (open.length === 0) {
     openList.innerHTML = state.priorityFilter
-      ? `<p class="view-note empty-good">No open ${state.priorityFilter} items right now.</p>`
-      : `<p class="view-note empty-good">Nothing waiting on an officer right now. Every open item has been picked up.</p>`;
+      ? `<p class="view-note empty-good">No open ${state.priorityFilter} items.</p>`
+      : `<p class="view-note empty-good">Nothing waiting. Every open item has been picked up.</p>`;
   } else {
     openList.innerHTML = open.map(renderRow).join("");
+    open.forEach((m) => state.seen.add(m.message_id));
   }
 
   bindRows(el("view-queue"));
@@ -347,7 +363,8 @@ function renderAcked() {
   el("ackCount").textContent = acked.length;
   el("ackedList").innerHTML = acked.length
     ? acked.map(renderRow).join("")
-    : `<p class="view-note">Nothing acknowledged yet. Press ACKNOWLEDGE on an item in the queue and it moves here.</p>`;
+    : `<p class="view-note">Nothing acknowledged yet.</p>`;
+  acked.forEach((m) => state.seen.add(m.message_id));
   bindRows(el("view-acked"));
 }
 
@@ -355,9 +372,10 @@ function bindRows(root) {
   root.querySelectorAll("[data-toggle]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-toggle");
-      if (state.expanded.has(id)) state.expanded.delete(id);
-      else state.expanded.add(id);
-      render();
+      const open = !state.expanded.has(id);
+      if (open) state.expanded.add(id); else state.expanded.delete(id);
+      btn.closest(".dispatch-row").querySelector(".row-detail").classList.toggle("open", open);
+      btn.textContent = open ? "hide details" : "full reasoning + draft reply";
     });
   });
   bindActions(root);
@@ -380,14 +398,17 @@ function renderPriorityFilter(msgs) {
   }));
 }
 
-function renderRow(m) {
+const clip = (s, n) => (s && s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s || "");
+
+function renderRow(m, idx = 0) {
+  const isNew = !state.seen.has(m.message_id);
   const color = URGENCY_COLOR[m.access_adjusted_priority] || "#9C948A";
   const isOpen = state.expanded.has(m.message_id);
 
   let flags = "";
   if (m.should_escalate) flags += `<span class="flag-tag flag-escalate ${m.escalation_level === 2 ? "lvl2" : ""}">&#9650; ESCALATED → ${escapeHtml(m.escalate_to).toUpperCase()}</span>`;
   if (m.dropout_flag) flags += `<span class="flag-tag">&#9679; SENDER SILENT</span>`;
-  if (m.degraded) flags += `<span class="flag-tag muted">&#9888; NOT LLM-CHECKED</span>`;
+  if (m.degraded) flags += `<span class="flag-tag muted">&#9888; NOT AI-CHECKED</span>`;
   if (m.second_opinion) flags += `<span class="flag-tag muted">&#9670; 2ND OPINION DIFFERS</span>`;
 
   let timer = "";
@@ -402,7 +423,7 @@ function renderRow(m) {
   const signals = (m.safety_signals || []).map((s) => `${escapeHtml(s.signal)} (&ldquo;${escapeHtml(s.matched)}&rdquo; → at least ${s.floor})`).join("<br>");
 
   return `
-  <div class="dispatch-row ${m.acknowledged ? "acked" : ""}" style="--row-color:${color}">
+  <div class="dispatch-row ${m.acknowledged ? "acked" : ""} ${isNew ? "enter" : ""} ${m.access_adjusted_priority === "critical" && !m.acknowledged ? "is-critical" : ""}" style="--row-color:${color};--i:${Math.min(idx, 8)}">
     <div class="rowid mono">${m.message_id}<br><span class="rowmeta">${escapeHtml(m.sender_id)}</span></div>
     <div class="rowmeta">${fmtTime(m.timestamp)}<br>${m.channel}<br>${escapeHtml(m.location)}<br><span class="access-${m.access_status}">${m.access_status}</span></div>
     <div>
@@ -414,15 +435,18 @@ function renderRow(m) {
         <div class="detail-grid">
           <div>
             <h5>How the priority was decided</h5>
-            <ol class="steps">${m.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
+            <div class="verdicts">
+              <span class="verdict"><b>AI</b> ${m.llm_urgency || "offline"}</span>
+              <span class="verdict"><b>Backup model</b> ${m.baseline_urgency}</span>
+              <span class="verdict"><b>Safety rules</b> ${signals ? escapeHtml(m.safety_signals[0].signal) : "none"}</span>
+              <span class="verdict final"><b>Final</b> ${m.access_adjusted_priority}</span>
+            </div>
+            <ol class="steps">${m.steps.map((s) => `<li title="${escapeHtml(s)}">${escapeHtml(clip(s, 150))}</li>`).join("")}</ol>
             <dl>
-              <dt>Routing</dt><dd>${escapeHtml(m.route_reason)}</dd>
-              <dt>LLM</dt><dd>${m.llm_urgency ? `${m.llm_urgency} — ` : ""}${escapeHtml(m.llm_reason)}</dd>
-              <dt>Baseline model</dt><dd>${m.baseline_urgency}</dd>
-              ${signals ? `<dt>Safety tripwires</dt><dd>${signals}</dd>` : ""}
-              ${m.second_opinion ? `<dt class="warn">Second opinion</dt><dd class="warn">${escapeHtml(m.second_opinion)}</dd>` : ""}
-              <dt class="${m.should_escalate ? "err" : ""}">Escalation</dt><dd class="${m.should_escalate ? "err" : ""}">${escapeHtml(m.escalation_reason)}</dd>
-              ${m.dropout_flag ? `<dt class="warn">Comms dropout</dt><dd class="warn">${escapeHtml(m.dropout_reason)}</dd>` : ""}
+              <dt>Routing</dt><dd>${escapeHtml(clip(m.route_reason, 130))}</dd>
+              ${m.second_opinion ? `<dt class="warn">Second opinion</dt><dd class="warn">${escapeHtml(clip(m.second_opinion, 130))}</dd>` : ""}
+              ${m.should_escalate ? `<dt class="err">Escalation</dt><dd class="err">${escapeHtml(m.escalation_reason)}</dd>` : ""}
+              ${m.dropout_flag ? `<dt class="warn">Went silent</dt><dd class="warn">${escapeHtml(m.dropout_reason)}</dd>` : ""}
             </dl>
           </div>
           <div class="draft-box">
@@ -504,7 +528,7 @@ function renderActivity() {
         <span class="activity-detail">${escapeHtml(e.detail)}</span>
       </div>`;
     }).join("")
-    : `<p class="view-note">${state.activityFilter ? `Nothing by ${escapeHtml(state.activityFilter)} yet.` : "Nothing has happened yet \u2014 advance the clock or act on a message."}</p>`;
+    : `<p class="view-note">${state.activityFilter ? `Nothing by ${escapeHtml(state.activityFilter)} yet.` : "Nothing yet."}</p>`;
 }
 
 function renderWelfare() {
@@ -526,14 +550,20 @@ function renderWelfare() {
         ${e.note ? `<div class="welfare-note"><strong>Note:</strong> ${escapeHtml(e.note)}</div>` : ""}
         ${e.followup
           ? `<div class="welfare-followup ok">&#10003; Sender made contact again at ${fmtTime(e.followup.time)} (${e.followup.message_id}): &ldquo;${escapeHtml(e.followup.raw_text)}&rdquo;</div>`
-          : `<div class="welfare-followup">No contact from the sender since the check. Confirm the outcome with whoever attended.</div>`}
+          : `<div class="welfare-followup">No contact since the check. Confirm the outcome with whoever attended.</div>`}
       </div>`).join("")
-    : `<p class="view-note">No welfare checks logged yet. When a sender shows SENDER SILENT in "Needs a human now", press LOG WELFARE CHECK there.</p>`;
+    : `<p class="view-note">No welfare checks yet.</p>`;
 
 }
 
 function bindActions(root) {
-  root.querySelectorAll("[data-ack]").forEach((b) => b.addEventListener("click", () => acknowledge(b.dataset.ack)));
+  root.querySelectorAll("[data-ack]").forEach((b) => b.addEventListener("click", () => {
+    const row = b.closest(".dispatch-row, .attention-row");
+    if (row && !(typeof FX_REDUCE !== "undefined" && FX_REDUCE)) {
+      row.classList.add("leaving");
+      setTimeout(() => acknowledge(b.dataset.ack), 230);
+    } else acknowledge(b.dataset.ack);
+  }));
   root.querySelectorAll("[data-approve]").forEach((b) => b.addEventListener("click", () => approveDraft(b.dataset.approve)));
   root.querySelectorAll("[data-welfare-open]").forEach((b) => b.addEventListener("click", () => {
     if (state.playing) togglePlay();  // stop the clock while the officer fills in the form
@@ -552,35 +582,76 @@ function bindActions(root) {
 }
 
 // ---------- Evaluation / compare ----------
-function evalBlock(ev, heading) {
+const EVAL_NAMES = [
+  [/^LLM alone/, "AI alone"],
+  [/^Baseline alone/, "Baseline model alone"],
+  [/^Safety-net/, "Safety rules alone"],
+  [/^Full pipeline.*OUTAGE/i, "Full system, AI offline"],
+  [/^Full pipeline/, "Full system"],
+];
+const shortName = (n) => (EVAL_NAMES.find(([re]) => re.test(n)) || [null, n])[1];
+const COLS = {
+  urgent: "Of the messages that were truly high or critical, the share that reached the fast lane.",
+  critical: "Of the truly critical messages, the share ranked critical (15-minute clock).",
+  false: "Routine (low or medium) messages pushed into the fast lane: the price of catching urgent ones.",
+  missed: "Truly urgent messages that did NOT reach the fast lane.",
+  exact: "How often the priority level matched the answer key exactly.",
+};
+
+function llmPill(ev) {
+  const bench = ev.title === "Benchmark";
+  let text, cls = "warn";
+  if (ev.llm_is_real) { text = bench ? "Real AI outputs" : `AI judged all ${ev.n}`; cls = "ok"; }
+  else if (!bench && ev.llm_ok) text = `AI judged ${ev.llm_ok} of ${ev.n}`;
+  else text = bench ? "AI column: hand-written stand-ins" : "No AI verdicts";
+  return `<span class="pill ${cls}" title="${escapeHtml(ev.llm_source)}">${text}</span>`;
+}
+const scoreCell = (v) => `<td class="${v >= 0.97 ? "good" : v < 0.9 ? "disagree" : ""}">${pct(v)}</td>`;
+const missedCell = (ids) => !ids.length
+  ? `<td class="good">none</td>`
+  : `<td class="mono" title="${ids.join(", ")}">${ids.length}: ${ids.slice(0, 3).join(", ")}${ids.length > 3 ? ` +${ids.length - 3} more` : ""}</td>`;
+
+// The one number that matters, as animated bars: of the truly urgent messages, how many reached a human.
+function evalBars(ev) {
+  const instant = state.fxIntro.eval;
+  return `<div class="bars"><div class="bars-title">Urgent messages that reached a human</div>${ev.rows.map((r) => {
+    const v = r.urgent_recall == null ? 0 : r.urgent_recall;
+    const w = Math.round(v * 100);
+    const cls = v >= 0.97 ? "good" : v < 0.9 ? "bad" : "mid";
+    return `<div class="bar-row">
+      <span class="bar-name">${escapeHtml(shortName(r.name))}</span>
+      <div class="bar-track"><div class="bar-fill ${cls}" data-w="${w}" style="width:${instant ? w : 0}%"></div></div>
+      <span class="bar-val">${pct(r.urgent_recall)}</span>
+      <span class="bar-miss ${r.missed_urgent.length ? "has" : ""}">${r.missed_urgent.length ? `${r.missed_urgent.length} missed` : "none missed"}</span>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function evalBlock(ev, heading, sub) {
   return `
-    <h4>${escapeHtml(heading)} <span class="view-note">(${ev.n} messages)</span></h4>
-    <p class="${ev.llm_is_real ? "source-note" : "source-note warn"}"><strong>LLM:</strong> ${escapeHtml(ev.llm_source)}</p>
-    ${ev.caveat ? `<p class="view-note caveat"><strong>Read with care:</strong> ${escapeHtml(ev.caveat)}</p>` : ""}
+    <div class="eval-head"><h4>${escapeHtml(heading)} <span class="view-note">${escapeHtml(sub)}</span></h4>${llmPill(ev)}</div>
+    ${ev.caveat ? `<p class="view-note caveat" title="${escapeHtml(ev.caveat)}">Built from our own templates, so these scores are optimistic. The benchmark below is the independent check.</p>` : ""}
+    ${evalBars(ev)}
     <table class="dispatch-table eval-table">
-      <tr><th>Approach</th><th>Exact accuracy</th><th>Urgent recall<br>(true high/critical → fast lane)</th>
-          <th>Critical recall</th><th>Routine items pushed<br>into fast lane</th><th>Urgent items missed</th></tr>
+      <tr><th>Approach</th><th title="${COLS.urgent}">Urgent caught</th><th title="${COLS.critical}">Critical caught</th>
+          <th title="${COLS.false}">False alarms</th><th title="${COLS.missed}">Missed</th><th title="${COLS.exact}">Exact level</th></tr>
       ${ev.rows.map((r) => `<tr>
-        <td><strong>${escapeHtml(r.name)}</strong>${r.note ? `<br><span class="view-note">${escapeHtml(r.note)}</span>` : ""}</td>
+        <td title="${escapeHtml(r.name + (r.note ? " \u2014 " + r.note : ""))}"><strong>${escapeHtml(shortName(r.name))}</strong>${/stand-in/i.test(r.note || "") ? `<br><span class="view-note">stand-in values, not a real measurement</span>` : ""}</td>
+        ${scoreCell(r.urgent_recall)}${scoreCell(r.critical_recall)}
+        <td>${r.false_urgent} of ${r.n_routine}</td>${missedCell(r.missed_urgent)}
         <td>${pct(r.accuracy)}</td>
-        <td class="${r.urgent_recall >= 0.97 ? "good" : r.urgent_recall < 0.9 ? "disagree" : ""}">${pct(r.urgent_recall)}</td>
-        <td class="${r.critical_recall >= 0.97 ? "good" : r.critical_recall < 0.9 ? "disagree" : ""}">${pct(r.critical_recall)}</td>
-        <td>${r.false_urgent} / ${r.n_routine}</td>
-        <td class="mono">${r.missed_urgent.length ? r.missed_urgent.join(", ") : "none"}</td>
       </tr>`).join("")}
-    </table>
-    <p class="view-note">Scored against the ground-truth label. Recall is the headline because the brief's failure mode is an
-    urgent message getting buried; "routine items pushed into fast lane" is the price paid for that (officer time).
-    Baseline per-class recall: ${Object.entries(ev.baseline_per_class_recall).map(([k, v]) => `${k} ${pct(v)}`).join(" · ")}.</p>`;
+    </table>`;
 }
 
 function renderCompare() {
   const isShift = state.data.shift && state.data.shift.mode === "shift";
-  el("evalPrimary").innerHTML = `<div class="eval-block">${evalBlock(state.data.evaluation,
-    isShift ? "This live shift (scored against its hidden answer key)" : "Benchmark: 152 hand-written messages, cross-validated")}</div>`;
-  const bench = state.data.benchmark_evaluation;
+  const ev = state.data.evaluation, bench = state.data.benchmark_evaluation;
+  el("evalPrimary").innerHTML = `<div class="eval-block">${isShift
+    ? evalBlock(ev, "This live shift", `${ev.n} messages · scored against a hidden answer key`)
+    : evalBlock(ev, "Benchmark", `${ev.n} hand-written messages · cross-validated`)}</div>`;
   el("evalBenchmark").innerHTML = bench
-    ? `<div class="eval-block">${evalBlock(bench, "Independent benchmark: 152 hand-written messages, cross-validated")}</div>` : "";
+    ? `<div class="eval-block">${evalBlock(bench, "Independent benchmark", `${bench.n} hand-written messages · cross-validated`)}</div>` : "";
 
   const msgs = state.data.messages.filter((m) => m.true_urgency != null);
   let disagree = 0;
@@ -598,14 +669,23 @@ function renderCompare() {
     </tr>`;
   }).join("");
 
-  const baselineLabel = isShift ? "Baseline (never saw it)" : "Baseline (out-of-fold)";
   el("compareTableWrap").innerHTML = `
-    <h4>Per-message view (messages received so far): ${disagree} LLM/baseline disagreement(s)</h4>
-    <p class="view-note">The "answer key" column is the hidden label, revealed here only so you can see how each layer did.</p>
-    <table class="dispatch-table">
-      <tr><th>Message</th><th>Text</th><th>Answer key</th><th>LLM</th><th>${baselineLabel}</th><th>Final priority</th></tr>
-      ${rows}
-    </table>`;
+    <details class="more" ${state.evalDetailsOpen ? "open" : ""}>
+      <summary>Message-by-message results <span class="view-note">${msgs.length} messages · ${disagree} AI/baseline disagreements</span></summary>
+      <table class="dispatch-table">
+        <tr><th>Message</th><th>Text</th><th title="The hidden label, revealed here only for scoring">Answer key</th><th>AI</th>
+            <th>${isShift ? "Baseline (unseen)" : "Baseline (cross-val.)"}</th><th>Final</th></tr>
+        ${rows}
+      </table>
+    </details>`;
+  const d = el("compareTableWrap").querySelector("details");
+  d.addEventListener("toggle", () => { state.evalDetailsOpen = d.open; });
+  if (!state.fxIntro.eval) {
+    state.fxIntro.eval = true;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.querySelectorAll("#view-compare .bar-fill").forEach((b) => { b.style.width = b.dataset.w + "%"; });
+    }));
+  }
 }
 
 // ---------- Fairness ----------
@@ -615,17 +695,18 @@ function renderFairness() {
 
   if (pairs.length === 0) {
     container.innerHTML = "";
-    el("fairnessSummary").innerHTML = `<p class="view-note">Advance the simulation clock to see the fairness-audit pairs arrive.</p>`;
+    el("fairnessSummary").innerHTML = `<p class="view-note">Advance the clock to see the pairs arrive.</p>`;
     return;
   }
 
   let llmOk = 0, llmN = 0, baseOk = 0, finalOk = 0, complete = 0;
+  const pill = (ok, label) => `<span class="pill ${ok ? "ok" : "bad"}">${label} ${ok ? "&#10003;" : "&#10007;"}</span>`;
   container.innerHTML = pairs.map((p) => {
     const inf = p.informal, frm = p.formal;
     if (!inf || !frm) {
       const have = inf || frm;
-      return `<div class="fairness-pair"><div class="fairness-pair-id mono">${p.pair_id}</div>
-        <p class="view-note">Waiting on the ${inf ? "formal" : "informal"} half of this pair to arrive (true urgency: ${have.true_urgency}).</p></div>`;
+      return `<div class="fairness-pair"><div class="fairness-pair-head"><span class="mono fairness-pair-id">${p.pair_id}</span>
+        <span class="pill">true level: ${have.true_urgency}</span></div><p class="view-note">Waiting for the other half to arrive.</p></div>`;
     }
     complete++;
     // With the LLM off both sides are null, and null === null must not read as "consistent".
@@ -637,27 +718,24 @@ function renderFairness() {
     if (llmMatch) llmOk++;
     if (baseMatch) baseOk++;
     if (finalMatch) finalOk++;
-    const row = (m, style) => `<tr><td class="mono">${m.message_id}</td><td>${style}</td><td>${escapeHtml(m.raw_text)}</td>
-      <td>${m.llm_urgency || "—"}</td><td>${m.baseline_urgency}</td><td>${m.access_adjusted_priority}</td></tr>`;
+    const row = (m, style) => `<tr><td>${style}<br><span class="mono muted">${m.message_id}</span></td><td>${escapeHtml(m.raw_text)}</td>
+      <td>${m.llm_urgency || "—"}</td><td>${m.baseline_urgency}</td><td><strong>${m.access_adjusted_priority}</strong></td></tr>`;
     return `<div class="fairness-pair">
-      <div class="fairness-pair-id mono">${p.pair_id} <span class="view-note">— true urgency: ${inf.true_urgency}</span></div>
+      <div class="fairness-pair-head"><span class="mono fairness-pair-id">${p.pair_id}</span><span class="pill">true level: ${inf.true_urgency}</span></div>
       <table class="dispatch-table">
-        <tr><th>Message</th><th>Style</th><th>Text</th><th>LLM</th><th>Baseline</th><th>Final priority</th></tr>
-        ${row(inf, "Informal / SMS")}${row(frm, "Formal written")}
+        <tr><th>Style</th><th>Message</th><th>AI</th><th>Baseline</th><th>Final</th></tr>
+        ${row(inf, "Informal")}${row(frm, "Formal")}
       </table>
-      <p class="pair-verdict">
-        ${llmKnown ? `<span class="${llmMatch ? "good" : "disagree"}">LLM consistent: ${llmMatch ? "Yes" : "No"}</span>`
-                   : `<span class="view-note">LLM: no verdict (offline)</span>`} &middot;
-        <span class="${baseMatch ? "good" : "disagree"}">Baseline consistent: ${baseMatch ? "Yes" : "No"}</span> &middot;
-        <span class="${finalMatch ? "good" : "disagree"}">Final priority consistent: ${finalMatch ? "Yes" : "No"}</span>
-      </p>
+      <div class="pair-verdict"><span class="view-note">Same priority for both?</span>
+        ${llmKnown ? pill(llmMatch, "AI") : `<span class="pill muted">AI: no verdict</span>`}
+        ${pill(baseMatch, "Baseline")} ${pill(finalMatch, "Final")}</div>
     </div>`;
   }).join("");
 
   el("fairnessSummary").innerHTML = complete
-    ? `<p><strong>Across ${complete} complete pair(s):</strong> ${llmN ? `LLM consistent on ${llmOk}/${llmN}` : "LLM offline (no verdicts)"},
-       baseline on ${baseOk}/${complete}, final priority (after safety net + access weighting) on ${finalOk}/${complete}.
-       Where a classifier is inconsistent, the safety net and access weighting are what stop the informal writer being disadvantaged.</p>`
+    ? `<p class="fair-summary"><strong>Final priority matched in ${finalOk} of ${complete} pairs.</strong>
+       <span class="view-note">AI ${llmN ? `${llmOk}/${llmN}` : "offline"} &middot; baseline ${baseOk}/${complete}</span>
+       ${finalOk < complete ? `<span class="disagree">Mismatches are a finding to report.</span>` : ""}</p>`
     : "";
 }
 
@@ -673,28 +751,49 @@ function renderMap() {
     L 330 870 L 220 880 L 130 830 L 75 740 L 55 640 L 65 520 L 45 400 L 30 280
     L 55 190 L 40 130 L 90 75 L 160 30 L 230 15 Z`;
 
-  let svg = `<path d="${ntOutline}" fill="var(--panel-raised)" stroke="var(--line)" stroke-width="2"/>`;
-  svg += `<text x="250" y="895" text-anchor="middle" class="mono" font-size="17" fill="var(--muted)">NORTHERN TERRITORY — SCHEMATIC, NOT TO SCALE</text>`;
+  let svg = `<path d="${ntOutline}" fill="#222A35" stroke="#46526A" stroke-width="2" stroke-linejoin="round"/>`;
+  svg += `<text x="30" y="893" class="mono" font-size="14" fill="#7C8594" letter-spacing="1">NORTHERN TERRITORY — SCHEMATIC, NOT TO SCALE</text>`;
 
+  const hub = LOCATIONS["Darwin"];
+  let flows = "";
+  Object.entries(LOCATIONS).forEach(([name, pos]) => {
+    if (name === "Darwin") return;
+    const open = (byLocation[name] || []).filter((m) => !m.acknowledged);
+    if (!open.length) return;
+    const best = open.reduce((a, b) => (URGENCY_ORDER[a.access_adjusted_priority] <= URGENCY_ORDER[b.access_adjusted_priority] ? a : b));
+    const col = URGENCY_COLOR[best.access_adjusted_priority];
+    const mx = (pos.x + hub.x) / 2 + (pos.y - hub.y) * 0.16, my = (pos.y + hub.y) / 2 - (pos.x - hub.x) * 0.16;
+    const d = `M ${pos.x} ${pos.y} Q ${mx} ${my} ${hub.x} ${hub.y}`;
+    const fast = best.access_adjusted_priority === "critical";
+    flows += `<path d="${d}" class="flow-line" stroke="${col}"/>
+      <circle r="3.6" fill="${col}"><animateMotion dur="${fast ? 2.2 : 4}s" repeatCount="indefinite" path="${d}"/></circle>`;
+  });
+  svg += flows;
+  svg += `<circle cx="${hub.x}" cy="${hub.y}" r="21" class="hub-ring"/>
+    <text x="${hub.x + 26}" y="${hub.y - 20}" class="hub-label">TRIAGE CENTRE</text>`;
+
+  const introMap = !state.fxIntro.map;
+  let pinIdx = 0;
   Object.entries(LOCATIONS).forEach(([name, pos]) => {
     const here = byLocation[name] || [];
     const open = here.filter((m) => !m.acknowledged);
-    let color = "var(--line)";
+    let color = "#46526A";
     if (open.length) {
       const best = open.reduce((a, b) => (URGENCY_ORDER[a.access_adjusted_priority] <= URGENCY_ORDER[b.access_adjusted_priority] ? a : b));
       color = URGENCY_COLOR[best.access_adjusted_priority];
-    } else if (here.length) color = "var(--muted)";
+    } else if (here.length) color = "#8A93A3";
     const active = state.activePin === name;
     const pulsing = open.some((m) => m.should_escalate) || here.some((m) => m.dropout_flag);
     svg += `
-      <g class="pin" data-loc="${name}">
+      <g class="pin ${introMap ? "intro" : ""}" data-loc="${name}" style="--i:${pinIdx++}">
         ${pulsing ? `<circle cx="${pos.x}" cy="${pos.y}" r="14" fill="none" stroke="${color}" stroke-width="2" opacity="0.6"><animate attributeName="r" values="10;18;10" dur="1.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.6;0;0.6" dur="1.4s" repeatCount="indefinite"/></circle>` : ""}
-        <circle class="core" cx="${pos.x}" cy="${pos.y}" r="${here.length ? 9 : 5}" fill="${color}" stroke="${active ? "#fff" : "var(--bg)"}" stroke-width="2"/>
+        <circle class="core" cx="${pos.x}" cy="${pos.y}" r="${here.length ? 9 : 5}" fill="${color}" stroke="${active ? "#fff" : "#14171D"}" stroke-width="2"/>
         <text x="${pos.x + 14}" y="${pos.y + 4}">${name}${open.length ? ` (${open.length})` : ""}</text>
       </g>`;
   });
 
   el("ntMap").innerHTML = svg;
+  state.fxIntro.map = true;
   el("ntMap").querySelectorAll("[data-loc]").forEach((g) => {
     g.addEventListener("click", () => {
       state.activePin = g.getAttribute("data-loc");
@@ -742,29 +841,35 @@ async function runTry() {
     el("tryResult").innerHTML = `<p class="disagree">${escapeHtml(r.error)}</p>`;
     return;
   }
-  const signals = r.safety_signals.map((s) => `${escapeHtml(s.signal)} (&ldquo;${escapeHtml(s.matched)}&rdquo;)`).join(", ");
+  const asMessage = {
+    llm_urgency: r.llm.ok ? r.llm.urgency_score : null,
+    llm_reason: r.llm.ok ? r.llm.flag_reason : r.llm.error,
+    baseline_urgency: r.baseline.urgency_score,
+    content_urgency: r.content_urgency,
+    safety_signals: r.safety_signals,
+    safety_floor: r.safety_floor,
+    access_status: r.access_status,
+    access_adjusted_priority: r.priority,
+    category: r.route.category,
+  };
   el("tryResult").innerHTML = `
     <div class="try-card" style="--row-color:${URGENCY_COLOR[r.priority]}">
       <div class="try-head">${tag(r.priority)} <span class="team-tag inline">${escapeHtml(r.route.team)}${r.route.cc_duty_officer ? " + Duty Officer" : ""}</span>
-        <span class="timer">${r.sla_minutes != null ? `must be acknowledged within ${r.sla_minutes} min or it escalates` : "routine — no auto-escalation"}</span></div>
-      <div class="why"><strong>Why:</strong> ${escapeHtml(r.headline)}</div>
-      <ol class="steps">${r.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
-      <dl>
-        <dt>LLM</dt><dd>${r.llm.ok ? `${r.llm.urgency_score} — ${escapeHtml(r.llm.flag_reason)}` : `unavailable: ${escapeHtml(r.llm.error)}`}</dd>
-        <dt>Baseline model</dt><dd>${r.baseline.urgency_score} (confidence ${Math.round(r.baseline.confidence * 100)}%)</dd>
-        <dt>Safety tripwires</dt><dd>${signals || "none matched"}</dd>
-        <dt>Routing</dt><dd>${escapeHtml(r.route.reason)}</dd>
-      </dl>
+        <span class="timer">${r.sla_minutes != null ? `must be acknowledged within ${r.sla_minutes} min or it escalates` : "routine, no auto-escalation"}</span></div>
+      <div class="jr-stages try-stages">${stageCards(asMessage)}</div>
+      <details class="more"><summary>Step-by-step reasoning</summary>
+        <ol class="steps">${r.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol></details>
       <div class="draft-box">
-        <h5>Draft acknowledgement — not sent, requires officer approval</h5>
+        <h5>Draft acknowledgement. Not sent: needs officer approval</h5>
         <div class="draft-text">${escapeHtml(r.draft.draft)}</div>
-        <p class="draft-note">${escapeHtml(r.draft.officer_note)}</p>
+        <p class="draft-note">${escapeHtml(clip(r.draft.officer_note, 260))}</p>
       </div>
       <div class="try-footer">
         <button id="addToQueueBtn" class="ctrl-btn">+ ADD TO QUEUE</button>
-        <span class="view-note">This is just a preview above — nothing's saved until you add it. It won't affect the Evaluation/Fairness numbers (those only score the generated shift and the benchmark, never messages you type).</span>
+        <span class="view-note">Preview only. Nothing is saved until you add it.</span>
       </div>
     </div>`;
+  playLit(el("tryResult"), TRY_TIMERS, 380, 120);
 
   el("addToQueueBtn").addEventListener("click", async (e) => {
     e.target.disabled = true;
@@ -773,7 +878,7 @@ async function runTry() {
     e.target.textContent = `ADDED AS ${mid}`;
     const note = document.createElement("p");
     note.className = "view-note empty-good";
-    note.innerHTML = `Added to the live queue as <strong>${mid}</strong> — <button class="link-btn" id="goToQueueBtn">view it in Message Queue</button>.`;
+    note.innerHTML = `Added as <strong>${mid}</strong> &middot; <button class="link-btn" id="goToQueueBtn">view in queue</button>`;
     e.target.closest(".try-footer").appendChild(note);
     el("goToQueueBtn").addEventListener("click", () => {
       state.expanded.add(mid);
@@ -785,9 +890,13 @@ async function runTry() {
 // ---------- Controls ----------
 function setView(view) {
   state.view = view;
+  if (view !== "map") state.fxIntro.map = false;
+  if (view !== "compare") state.fxIntro.eval = false;
+  if (location.hash !== "#" + view) history.replaceState(null, "", "#" + view);
   document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
   render();
+  if (typeof moveTabIndicator === "function") moveTabIndicator();
 }
 
 function setMinutes(m) {
@@ -838,16 +947,24 @@ el("roleSelect").addEventListener("change", (e) => {
 });
 el("newShiftBtn").addEventListener("click", () => newShift("shift"));
 el("seedInput").addEventListener("keydown", (e) => { if (e.key === "Enter") newShift("shift"); });
-el("llmBtn").addEventListener("click", () => {
-  state.llmOnline = !state.llmOnline;
-  fetchState();
-});
+el("queueSearch").addEventListener("input", (e) => { state.search = e.target.value; renderQueue(); });
 el("teamFilter").addEventListener("change", (e) => { state.teamFilter = e.target.value; renderQueue(); });
 el("tryBtn").addEventListener("click", runTry);
 document.querySelectorAll(".tab-btn").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 
 
 renderExamples();
+
+// Deep links: /#compare, /#fairness, ... open that tab directly (handy mid-demo).
+const VIEW_NAMES = [...document.querySelectorAll(".tab-btn")].map((b) => b.dataset.view);
+const viewFromHash = () => { const v = location.hash.slice(1); if (VIEW_NAMES.includes(v) && v !== state.view) setView(v); };
+window.addEventListener("hashchange", viewFromHash);
+viewFromHash();
+
+// /?t=240 opens the shift at +240 minutes (handy for rehearsing a particular moment).
+const _t = parseInt(new URLSearchParams(location.search).get("t"), 10);
+if (!isNaN(_t)) setMinutes(Math.min(480, Math.max(0, Math.round(_t / 15) * 15)));
+
 fetchState();
 
 // Messages can arrive from outside (POST /api/ingest). Looking is free (no API credits), so check every few

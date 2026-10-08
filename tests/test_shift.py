@@ -152,7 +152,7 @@ def test_server_shift_mode_end_to_end(tmp_path):
 
     # No key in tests: honest "LLM unavailable", never a made-up verdict.
     assert all(m["llm_urgency"] is None and m["degraded"] for m in state["messages"])
-    assert "No LLM verdicts" in state["evaluation"]["llm_source"]
+    assert "No AI verdicts" in state["evaluation"]["llm_source"]
 
     # The escalation clock still follows the final priority.
     for m in state["messages"]:

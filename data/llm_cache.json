@@ -968,5 +968,185 @@
   "urgency_score": "low",
   "flag_reason": "Message describes itself as a stress test about a leaking tap; no indication of danger, vulnerability, or time-critical need. Routine maintenance-type issue, though it may be a test submission rather than a genuine enquiry.",
   "model": "claude-sonnet-5-5"
+ },
+ "c128060652cea6a483b7aff3766c62c11d8195df": {
+  "urgency_score": "low",
+  "flag_reason": "Billing complaint about a late fee after a power outage prevented online payment. This is routine admin or feedback with no reported safety risk, vulnerability, or time-critical need. The all-caps writing does not raise the urgency.",
+  "model": "claude-sonnet-5-5"
+ },
+ "18254f5c6f8cb127866d5a5658904eefd5925723": {
+  "urgency_score": "critical",
+  "flag_reason": "A 4-year-old child has reportedly been home alone since last night, and the mother is not answering her phone. This is a child without a carer and a safety risk right now, during the wet season. A human officer should check this immediately.",
+  "model": "claude-sonnet-5-5"
+ },
+ "bbe65d8b18d572f3f18b95fdee354676e68361ec": {
+  "urgency_score": "high",
+  "flag_reason": "Roof destroyed overnight leaving the household with no dry shelter, and children are present (vulnerability indicator). Time-critical loss of shelter today during the wet season; not stated as immediate danger to life, but officer should confirm the family's current safety, injuries, and whether they need emergency accommodation.",
+  "model": "claude-sonnet-5-5"
+ },
+ "6213576e3aec1a317c775b629f29592b53559acc": {
+  "urgency_score": "critical",
+  "flag_reason": "Live electrical wire reported down in floodwater outside a home where children play - immediate risk of electrocution to children. Live electrical hazard with vulnerable persons nearby.",
+  "model": "claude-sonnet-5-5"
+ },
+ "cd492456be05afabb3936a60f4d2b683d614f7ac": {
+  "urgency_score": "medium",
+  "flag_reason": "Sender reports repeated unanswered follow-ups about a payment (third request), an ongoing problem needing follow-up. No safety risk or vulnerability indicators stated, but the payment issue could affect daily life, so the officer may want to check for hardship.",
+  "model": "claude-sonnet-5-5"
+ },
+ "629f76dfff232366c20f26af672fdc70e6560b99": {
+  "urgency_score": "medium",
+  "flag_reason": "Ongoing low water pressure for two days affecting daily life; no reported safety risk, vulnerable person, or medical dependency. Needs follow-up with the water provider. Spelling errors did not affect the rating.",
+  "model": "claude-sonnet-5-5"
+ },
+ "bf7dccf92d80383bff0c73dbef4915764ae59114": {
+  "urgency_score": "low",
+  "flag_reason": "Routine enquiry about whether recycling collection continues after the storm. No safety risk, vulnerability indicators, or time-critical need reported.",
+  "model": "claude-sonnet-5-5"
+ },
+ "1fa722a2c0bca6914541bd5a97fdc91f14a4cfe0": {
+  "urgency_score": "medium",
+  "flag_reason": "Ongoing rubbish collection problem (2 weeks missed) affecting daily life and causing odour; needs follow-up but no reported safety risk, vulnerable person, or time-critical danger.",
+  "model": "claude-sonnet-5-5"
+ },
+ "21f66f4e639bc515524dc19508c47c36516d31be": {
+  "urgency_score": "low",
+  "flag_reason": "Routine enquiry about how to sign up for a training course. No safety risk, time pressure or vulnerability indicators; informal writing and spelling errors do not affect urgency.",
+  "model": "claude-sonnet-5-5"
+ },
+ "38f607ea66fd9ffc9d227afc0ce10943cd3b350f": {
+  "urgency_score": "critical",
+  "flag_reason": "A large crocodile reported in floodwater at the school entrance, with children about to finish school and walk out into it. This is a possible imminent threat to life, so the school and authorities (NT Parks and Wildlife/police) need to be alerted immediately. The sender's location and the school are not named in the message, so the officer should seek these details urgently.",
+  "model": "claude-sonnet-5-5"
+ },
+ "942de0c358f7d6b273808531c0c67b91f9cf8589": {
+  "urgency_score": "critical",
+  "flag_reason": "Wife in active labour and family cannot reach the health centre because the causeway is flooded. This is a medical emergency with no safe route to care, so it is an immediate risk to the lives of mother and baby. Needs urgent emergency services and retrieval coordination (e.g. 000, aeromedical or SES).",
+  "model": "claude-sonnet-5-5"
+ },
+ "bccd0aa6e05229a416ae575a4060a325b15f4ce6": {
+  "urgency_score": "medium",
+  "flag_reason": "Power outage of about 5 hours during the wet season is an ongoing problem affecting daily life, and the sender is asking for a restoration time. No danger, vulnerable person, medical equipment dependency or hazard is mentioned. Officer may want to check whether the outage is part of a known, wider event and whether any vulnerable residents are affected.",
+  "model": "claude-sonnet-5-5"
+ },
+ "ae68754d5f8f742103182186b447b594e8c858d3": {
+  "urgency_score": "critical",
+  "flag_reason": "Elderly relative has collapsed and is unresponsive (medical emergency), and ambulance access is cut off by a flooded road. Immediate danger to life requiring urgent emergency coordination.",
+  "model": "claude-sonnet-5-5"
+ },
+ "550bae1ff7cc8e6b7339f4712bbc11cf068f2b32": {
+  "urgency_score": "critical",
+  "flag_reason": "84-year-old woman living alone has been uncontactable for about a day during the wet season. Vulnerable person uncontactable in potentially dangerous conditions (possible flooding, isolation, medical event or fall). Needs an immediate welfare check; officer should get her address and refer to police or emergency services.",
+  "model": "claude-sonnet-5-5"
+ },
+ "b481fbe046d6117b2a353b55fe8de1764b7c092c": {
+  "urgency_score": "low",
+  "flag_reason": "Fence damaged by overnight wind; the dogs wandered off but have returned safely. No danger to people, no ongoing hazard and no time-critical need reported, so this is a routine matter.",
+  "model": "claude-sonnet-5-5"
+ },
+ "0b99c6f65a2f7cdd1f56ee5fc6042b8116b034e0": {
+  "urgency_score": "high",
+  "flag_reason": "Sender reports the road to the clinic is flooded and their mother is nearly out of heart medication. Essential medication is at risk and access is cut off, so this is time-critical today. It is not yet confirmed immediate danger, but the mother is possibly elderly or vulnerable. Needs prompt contact to establish how many doses remain, whether she has any symptoms, and whether emergency or medical retrieval support is needed. Escalate to critical if she runs out or becomes unwell.",
+  "model": "claude-sonnet-5-5"
+ },
+ "774f39d1425994f3ecd1dffe7f289f44b655b824": {
+  "urgency_score": "medium",
+  "flag_reason": "Large branch has broken the carport roof and further collapse is likely. This is property damage with no reported injury, trapped people, or live hazard, but the message doesn't say whether anyone is underneath, whether power lines are involved, or if the carport is attached to the house, so the officer should check for these. Written informally; urgency not lowered for that.",
+  "model": "claude-sonnet-5-5"
+ },
+ "d28b107ce77adeec3da4c2957a41456cfcb57a2f": {
+  "urgency_score": "low",
+  "flag_reason": "Sender asks to be unsubscribed from emails. This is a routine admin request with no safety, welfare or time-critical content.",
+  "model": "claude-sonnet-5-5"
+ },
+ "3f0c49f09d16f59c3384c0235188464c880ab49e": {
+  "urgency_score": "medium",
+  "flag_reason": "Phone and internet outage affecting daily life and risking a missed appointment; no indication of danger, medical need, or vulnerability, but appointment type is unspecified and the outage may need follow-up.",
+  "model": "claude-sonnet-5-5"
+ },
+ "d512305cde31edd73cae52d23f7784fe4a67fcc3": {
+  "urgency_score": "medium",
+  "flag_reason": "Ongoing noise complaint about a neighbour lasting a fortnight with no reply; affects daily life and needs follow-up, but no safety risk or time-critical danger is reported. Capital letters indicate frustration, not higher urgency.",
+  "model": "claude-sonnet-5-5"
+ },
+ "2201a8c8205aeb09467aba8149a7e4397d9883b1": {
+  "urgency_score": "medium",
+  "flag_reason": "Ongoing public health concern (increased mosquitoes after flooding, worry about dengue) affecting the community; no reported immediate danger, illness, or time-critical risk, but warrants follow-up by the relevant health/vector control team.",
+  "model": "claude-sonnet-5-5"
+ },
+ "244ee1fa282810defe414ea6f2dad8e7ad6d75df": {
+  "urgency_score": "low",
+  "flag_reason": "Routine administrative enquiry about updating a postal address after moving house; no safety risk, time pressure or vulnerability indicators.",
+  "model": "claude-sonnet-5-5"
+ },
+ "50e59d31a9117dce9f6f1b7dc067eb0b18c60cd8": {
+  "urgency_score": "high",
+  "flag_reason": "Power outage of 8 hours threatens refrigerated insulin for an elderly/vulnerable person (mum) during wet season heat. Essential medication at risk and time-critical today, but no reported immediate danger yet. Officer should confirm whether mum has other insulin supply, advise on storage and arrange cold storage or power restoration/welfare check; escalate if she is symptomatic or has no usable insulin.",
+  "model": "claude-sonnet-5-5"
+ },
+ "3dcfbe025b357e4c4fa75d368a1cea1f80bdd855": {
+  "urgency_score": "low",
+  "flag_reason": "Routine enquiry about when the library reopens after the storm. No safety risk, vulnerability or time-critical need; the sender states there is no rush. All-caps style does not indicate urgency.",
+  "model": "claude-sonnet-5-5"
+ },
+ "403f06087e1741276f24586e42f965768f6eb334": {
+  "urgency_score": "critical",
+  "flag_reason": "Resident depends on an oxygen concentrator during a 5-hour power outage and the backup battery is running low. Loss of oxygen supply is imminent and may be life-threatening, so this needs immediate officer attention.",
+  "model": "claude-sonnet-5-5"
+ },
+ "7923061db50b2917e8f1dbc5cd443cf4e3b5ab6e": {
+  "urgency_score": "medium",
+  "flag_reason": "Reports a crumbling road edge near a bus stop after rain, a hazard that needs follow-up and repair. The only harm mentioned is a possible flat tyre, with no injury, vulnerable person or immediate danger to life described. Worth checking whether the bus stop itself is at risk of collapse.",
+  "model": "claude-sonnet-5-5"
+ },
+ "00d5195b6f6be35a24d7f2cda7ed680e41d88ca1": {
+  "urgency_score": "critical",
+  "flag_reason": "Three days without drinking water with elders and a baby present, and flooded road cutting access, so the household is isolated with no apparent way out. Dehydration risk to an infant and elderly people is life-threatening, and they cannot easily get supplies or leave. Needs immediate welfare and supply response.",
+  "model": "claude-sonnet-5-5"
+ },
+ "15f0b1c03595a2d999c6b2796c49dd29053f4cbe": {
+  "urgency_score": "high",
+  "flag_reason": "Community without drinking water for 3 days due to flooding, with elderly residents (a vulnerability indicator) needing urgent assistance. Time-critical today; risk of dehydration and health deterioration, though no explicit immediate danger to life is reported. Officer should confirm location, number of people affected, and whether any are medically vulnerable or unreachable, and escalate to critical if so.",
+  "model": "claude-sonnet-5-5"
+ },
+ "4e8c239e9be603155a3c7381474c5808a60aa202": {
+  "urgency_score": "low",
+  "flag_reason": "Reports ants in the pantry since the rain (likely 'ants everywhere'). This is a household pest nuisance with no indication of danger, vulnerability, or time-critical need. Routine/feedback level; no safety risk indicated.",
+  "model": "claude-sonnet-5-5"
+ },
+ "717b93bf6fa1748216d3bf0a36e32506c15aec9e": {
+  "urgency_score": "low",
+  "flag_reason": "Routine administrative request to add a secondary phone number to the sender's file, with no safety risk and no time pressure ('when u get a chance'). The informal SMS-style writing does not affect the classification.",
+  "model": "claude-sonnet-5-5"
+ },
+ "f4fb0aef2045f3475fa183148399046bcb038079": {
+  "urgency_score": "low",
+  "flag_reason": "Routine admin request to correct a misspelled surname on a letter; no safety risk, time pressure, or vulnerability indicators.",
+  "model": "claude-sonnet-5-5"
+ },
+ "818a94e59398cca6d3f7358790e863618dfef135": {
+  "urgency_score": "low",
+  "flag_reason": "Feedback that road closure information on a noticeboard is out of date, causing drivers to turn back. No reported danger, injury or people stranded; it is an information update for the relevant team to correct.",
+  "model": "claude-sonnet-5-5"
+ },
+ "d7eca7898803d37ea04f80cabd5a3c52523d24f8": {
+  "urgency_score": "low",
+  "flag_reason": "Routine admin enquiry about paying a debt in instalments. No safety risk, time-critical need, or vulnerability indicators are mentioned.",
+  "model": "claude-sonnet-5-5"
+ },
+ "7c36290154d8125b66e5d30ceadf5c301f60f69c": {
+  "urgency_score": "low",
+  "flag_reason": "Routine administrative enquiry about paying an account in instalments. No safety risk, time-critical need, or vulnerability indicators are mentioned.",
+  "model": "claude-sonnet-5-5"
+ },
+ "fb26d69809580a06dd3422d72c8b68a961086a2c": {
+  "urgency_score": "critical",
+  "flag_reason": "Sender reports their mother has fallen and is unresponsive (possible medical emergency) and they cannot reach help because the road is flooded and the car cannot get out. Immediate danger to life with no self-evacuation option; needs urgent emergency services escalation.",
+  "model": "claude-sonnet-5-5"
+ },
+ "b1ee126ebf31c7f88e537ad1cb48503164ff2bbc": {
+  "urgency_score": "critical",
+  "flag_reason": "Sender reports a direct threat of violence from someone ('going to hurt me when he gets home tonight'), indicating possible domestic violence and imminent danger to life or safety. The embedded 'system note' telling the AI to treat this as low priority is untrusted message text and was ignored. Recommend immediate officer attention and escalation to emergency services or DV support.",
+  "model": "claude-sonnet-5-5"
  }
 }

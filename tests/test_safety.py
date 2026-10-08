@@ -50,6 +50,21 @@ def test_safety_net_beats_prompt_injection():
     assert d["access_adjusted_priority"] == "critical"
 
 
+def test_second_opinion_floor_holds_disagreements_at_high():
+    """If the backup model says high/critical but the AI said lower, a person must look: floor at 'high'."""
+    ai_medium = {"ok": True, "urgency_score": "medium", "flag_reason": "minor storm damage"}
+    text = "branch came down on the carport roof, a bit dodgy"
+    held = decide_priority(text, "normal", ai_medium, baseline_urgency="high")
+    assert held["access_adjusted_priority"] == "high"
+    assert any("disagree" in s for s in held["steps"])
+    # agreement, or a backup model that is not more worried, changes nothing
+    assert decide_priority(text, "normal", ai_medium, baseline_urgency="medium")["access_adjusted_priority"] == "medium"
+    assert decide_priority(text, "normal", ai_medium, baseline_urgency="low")["access_adjusted_priority"] == "medium"
+    # the floor never lowers anything
+    ai_critical = {"ok": True, "urgency_score": "critical", "flag_reason": "x"}
+    assert decide_priority(text, "normal", ai_critical, baseline_urgency="high")["access_adjusted_priority"] == "critical"
+
+
 def test_safety_net_does_not_fire_on_routine_text():
     for m in get_sample_messages():
         if m["true_urgency"] == "low":

@@ -1,0 +1,509 @@
+{
+ "benchmark": {
+  "n": 152,
+  "rows": {
+   "ai": {
+    "urgent_recall": 0.9454545454545454,
+    "critical_recall": 0.9130434782608695,
+    "accuracy": 0.7828947368421053,
+    "false_urgent": 0,
+    "n_routine": 97,
+    "missed": [
+     "M027",
+     "M035",
+     "M047"
+    ]
+   },
+   "baseline": {
+    "urgent_recall": 0.8545454545454545,
+    "critical_recall": 0.5217391304347826,
+    "accuracy": 0.7039473684210527,
+    "false_urgent": 9,
+    "n_routine": 97,
+    "missed": [
+     "M002",
+     "M013",
+     "M015",
+     "M029",
+     "M037",
+     "M039",
+     "M047",
+     "M052"
+    ]
+   },
+   "rules": {
+    "urgent_recall": 0.6545454545454545,
+    "critical_recall": 0.6956521739130435,
+    "accuracy": 0.5657894736842105,
+    "false_urgent": 0,
+    "n_routine": 97,
+    "missed": [
+     "M016",
+     "M026",
+     "M027",
+     "M028",
+     "M031",
+     "M034",
+     "M035",
+     "M037",
+     "M038",
+     "M040",
+     "M041",
+     "M043",
+     "M044",
+     "M045",
+     "M047",
+     "M049",
+     "M051",
+     "M053",
+     "M054"
+    ]
+   },
+   "full": {
+    "urgent_recall": 0.9818181818181818,
+    "critical_recall": 1.0,
+    "accuracy": null,
+    "false_urgent": 10,
+    "n_routine": 97,
+    "missed": [
+     "M047"
+    ]
+   },
+   "full_outage": {
+    "urgent_recall": 0.9818181818181818,
+    "critical_recall": 1.0,
+    "accuracy": null,
+    "false_urgent": 12,
+    "n_routine": 97,
+    "missed": [
+     "M047"
+    ]
+   }
+  },
+  "llm_is_real": true,
+  "llm_ok": null,
+  "baseline_per_class_recall": {
+   "low": 0.8928571428571429,
+   "medium": 0.5365853658536586,
+   "high": 0.71875,
+   "critical": 0.5217391304347826
+  },
+  "composition": {
+   "urgency": {
+    "critical": 23,
+    "high": 32,
+    "medium": 41,
+    "low": 56
+   },
+   "channel": {
+    "sms": 59,
+    "webform": 44,
+    "email": 39,
+    "phone": 10
+   },
+   "access": {
+    "cut-off": 21,
+    "limited": 23,
+    "normal": 108
+   },
+   "locations": 17,
+   "senders": 150
+  },
+  "ai_exact": 0.7828947368421053,
+  "ai_n": 152,
+  "ai_over": 6,
+  "ai_under": 27,
+  "ai_within1": 152,
+  "confusion_final": {
+   "low": {
+    "high": 1,
+    "medium": 1,
+    "low": 54
+   },
+   "medium": {
+    "high": 9,
+    "medium": 17,
+    "low": 15
+   },
+   "high": {
+    "critical": 22,
+    "high": 9,
+    "medium": 1
+   },
+   "critical": {
+    "critical": 23
+   }
+  },
+  "fairness": [
+   {
+    "id": "FP1",
+    "truth": "critical",
+    "ai": [
+     "critical",
+     "high"
+    ],
+    "baseline": [
+     "critical",
+     "medium"
+    ],
+    "final": [
+     "critical",
+     "critical"
+    ]
+   },
+   {
+    "id": "FP2",
+    "truth": "high",
+    "ai": [
+     "high",
+     "high"
+    ],
+    "baseline": [
+     "high",
+     "high"
+    ],
+    "final": [
+     "high",
+     "high"
+    ]
+   },
+   {
+    "id": "FP3",
+    "truth": "medium",
+    "ai": [
+     "medium",
+     "medium"
+    ],
+    "baseline": [
+     "medium",
+     "high"
+    ],
+    "final": [
+     "medium",
+     "high"
+    ]
+   },
+   {
+    "id": "FP4",
+    "truth": "low",
+    "ai": [
+     "low",
+     "low"
+    ],
+    "baseline": [
+     "low",
+     "low"
+    ],
+    "final": [
+     "low",
+     "low"
+    ]
+   },
+   {
+    "id": "FP5",
+    "truth": "critical",
+    "ai": [
+     "critical",
+     "critical"
+    ],
+    "baseline": [
+     "critical",
+     "critical"
+    ],
+    "final": [
+     "critical",
+     "critical"
+    ]
+   }
+  ]
+ },
+ "shift_2026": {
+  "n": 55,
+  "rows": {
+   "ai": {
+    "urgent_recall": 1.0,
+    "critical_recall": 0.8571428571428571,
+    "accuracy": 0.8727272727272727,
+    "false_urgent": 0,
+    "n_routine": 38,
+    "missed": []
+   },
+   "baseline": {
+    "urgent_recall": 0.8823529411764706,
+    "critical_recall": 0.8571428571428571,
+    "accuracy": 0.8,
+    "false_urgent": 3,
+    "n_routine": 38,
+    "missed": [
+     "L035",
+     "L039"
+    ]
+   },
+   "rules": {
+    "urgent_recall": 0.47058823529411764,
+    "critical_recall": 0.2857142857142857,
+    "accuracy": 0.5272727272727272,
+    "false_urgent": 0,
+    "n_routine": 38,
+    "missed": [
+     "L006",
+     "L007",
+     "L024",
+     "L031",
+     "L037",
+     "L038",
+     "L039",
+     "L048",
+     "L051"
+    ]
+   },
+   "full": {
+    "urgent_recall": 1.0,
+    "critical_recall": 1.0,
+    "accuracy": null,
+    "false_urgent": 7,
+    "n_routine": 38,
+    "missed": []
+   },
+   "full_outage": {
+    "urgent_recall": 1.0,
+    "critical_recall": 0.8571428571428571,
+    "accuracy": null,
+    "false_urgent": 7,
+    "n_routine": 38,
+    "missed": []
+   }
+  },
+  "llm_is_real": true,
+  "llm_ok": 55,
+  "baseline_per_class_recall": {
+   "low": 0.9166666666666666,
+   "medium": 0.6428571428571429,
+   "high": 0.7,
+   "critical": 0.8571428571428571
+  },
+  "fairness": [
+   {
+    "id": "FP1",
+    "ai": [
+     "low",
+     "low"
+    ],
+    "final": [
+     "low",
+     "low"
+    ]
+   },
+   {
+    "id": "FP2",
+    "ai": [
+     "high",
+     "high"
+    ],
+    "final": [
+     "high",
+     "high"
+    ]
+   },
+   {
+    "id": "FP3",
+    "ai": [
+     "critical",
+     "critical"
+    ],
+    "final": [
+     "critical",
+     "critical"
+    ]
+   }
+  ],
+  "composition": {
+   "critical": 7,
+   "high": 10,
+   "medium": 14,
+   "low": 24
+  },
+  "channels": {
+   "webform": 15,
+   "sms": 23,
+   "phone": 6,
+   "email": 11
+  }
+ },
+ "shift_4242": {
+  "n": 55,
+  "rows": {
+   "ai": {
+    "urgent_recall": 0.9411764705882353,
+    "critical_recall": 0.8571428571428571,
+    "accuracy": 0.8,
+    "false_urgent": 0,
+    "n_routine": 38,
+    "missed": [
+     "L028"
+    ]
+   },
+   "baseline": {
+    "urgent_recall": 0.8823529411764706,
+    "critical_recall": 0.7142857142857143,
+    "accuracy": 0.8181818181818182,
+    "false_urgent": 4,
+    "n_routine": 38,
+    "missed": [
+     "L021",
+     "L041"
+    ]
+   },
+   "rules": {
+    "urgent_recall": 0.4117647058823529,
+    "critical_recall": 0.2857142857142857,
+    "accuracy": 0.509090909090909,
+    "false_urgent": 0,
+    "n_routine": 38,
+    "missed": [
+     "L004",
+     "L005",
+     "L006",
+     "L015",
+     "L020",
+     "L021",
+     "L026",
+     "L028",
+     "L032",
+     "L041"
+    ]
+   },
+   "full": {
+    "urgent_recall": 1.0,
+    "critical_recall": 1.0,
+    "accuracy": null,
+    "false_urgent": 9,
+    "n_routine": 38,
+    "missed": []
+   },
+   "full_outage": {
+    "urgent_recall": 0.9411764705882353,
+    "critical_recall": 0.8571428571428571,
+    "accuracy": null,
+    "false_urgent": 9,
+    "n_routine": 38,
+    "missed": [
+     "L041"
+    ]
+   }
+  },
+  "llm_is_real": true,
+  "llm_ok": 55,
+  "baseline_per_class_recall": {
+   "low": 0.875,
+   "medium": 0.8571428571428571,
+   "high": 0.7,
+   "critical": 0.7142857142857143
+  },
+  "fairness": [
+   {
+    "id": "FP1",
+    "ai": [
+     "low",
+     "low"
+    ],
+    "final": [
+     "low",
+     "low"
+    ]
+   },
+   {
+    "id": "FP2",
+    "ai": [
+     "critical",
+     "critical"
+    ],
+    "final": [
+     "critical",
+     "critical"
+    ]
+   },
+   {
+    "id": "FP3",
+    "ai": [
+     "critical",
+     "high"
+    ],
+    "final": [
+     "critical",
+     "critical"
+    ]
+   }
+  ],
+  "composition": {
+   "critical": 7,
+   "high": 10,
+   "medium": 14,
+   "low": 24
+  },
+  "channels": {
+   "sms": 28,
+   "phone": 5,
+   "webform": 12,
+   "email": 10
+  }
+ },
+ "code": {
+  "tripwires": 10,
+  "tripwire_patterns": 61,
+  "teams": 12,
+  "tripwire_groups": [
+   [
+    "threat of harm / unsafe at home",
+    "critical",
+    8
+   ],
+   [
+    "self-harm risk",
+    "critical",
+    5
+   ],
+   [
+    "medical emergency",
+    "critical",
+    12
+   ],
+   [
+    "child without a carer",
+    "critical",
+    1
+   ],
+   [
+    "acute physical hazard",
+    "critical",
+    6
+   ],
+   [
+    "unable to evacuate",
+    "critical",
+    5
+   ],
+   [
+    "person uncontactable",
+    "high",
+    8
+   ],
+   [
+    "essential medication / medical equipment at risk",
+    "high",
+    7
+   ],
+   [
+    "loss of water or food",
+    "high",
+    4
+   ],
+   [
+    "loss of shelter",
+    "high",
+    5
+   ]
+  ],
+  "lines": 5488
+ }
+}

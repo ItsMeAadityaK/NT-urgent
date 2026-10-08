@@ -62,8 +62,9 @@ def check_dropout(sender_history: list[dict], current_time: datetime = None) -> 
         return {
             "dropout_flag": True,
             "reason": f"Sender's last message was '{last_urgency}' urgency, "
-                      f"{silence_duration} ago with no follow-up "
-                      f"(expected within {threshold}h) — possible comms loss, worth a welfare check.",
+                      f"{int(silence_duration.total_seconds() // 3600)}h "
+                      f"{int(silence_duration.total_seconds() % 3600 // 60):02d}m ago, no follow-up "
+                      f"(expected within {threshold}h). Worth a welfare check.",
         }
 
     return {

@@ -21,6 +21,8 @@ ROUTES = [
     ("Personal safety", "Duty Officer \u2014 safety response", [
         r"hurt me", r"hit me", r"(don'?t|do not|does not|doesn'?t|not) feel safe", r"somewhere safe for",
         r"need somewhere safe", r"threat", r"violen", r"suicid", r"kill (me|myself|us)",
+        r"not safe (here|at home|tonight|to stay)", r"unsafe (here|at home|tonight)", r"drunk (and|&) angry",
+        r"(scared|afraid) of (him|her|them)",
     ]),
     ("Medical / health", "Health liaison", [
         r"clinic", r"ambulance", r"dialysis", r"insulin", r"medication", r"oxygen", r"\blabou?r\b",
@@ -30,9 +32,10 @@ ROUTES = [
     ("Welfare check", "Community welfare", [
         r"heard from", r"reach (him|her|them|my)", r"no contact", r"not answering", r"no answer",
         r"come home", r"living alone|lives alone", r"on (their|his|her) own", r"wheelchair",
+        r"home alo+ne", r"alone since", r"lives? al\w{2,3}\b", r"isn'?t answering|isnt answering|just rings", r"get hold of",
     ]),
     ("Acute hazard", "Infrastructure & hazards", [
-        r"\bgas\b", r"sparking", r"power ?line", r"live wiring", r"electrics",
+        r"\bgas\b", r"sparking", r"power ?line", r"live wir", r"electrics",
     ]),
     ("Housing / shelter", "Housing", [
         r"nowhere (dry )?to (stay|sleep)", r"no ?where to stay", r"(alternative|emergency) shelter",
@@ -48,7 +51,7 @@ ROUTES = [
     ]),
     ("Hazard / infrastructure", "Infrastructure & hazards", [
         r"retaining wall", r"\btree\b", r"branch", r"verandah", r"carport", r"pothole", r"footpath",
-        r"streetlight", r"\bdrain", r"gutter", r"\broof\b", r"fence", r"bus shelter", r"leak",
+        r"street ?light", r"crumbl", r"\bdrain", r"gutter", r"\broof\b", r"fence", r"bus shelter", r"leak",
     ]),
     ("Utilities & comms", "Utilities", [
         r"\bpower\b", r"electricity", r"generator", r"internet", r"phone line|landline|mobile",

@@ -216,7 +216,45 @@ the API, whatever is in your shell.
 
 ---
 
-## Demo script (≈5 minutes)
+## Presenting (10 minutes + Q&A)
+
+The talk is a short PowerPoint plus a live demo:
+
+- `presentation/NT-Triage-Deck.pptx`: 6 slides (title, problem, how it works, three layers, demo divider,
+  what is real / next), with speaker notes in each.
+- The demo runs on this site, opened on seed 2026 (replays saved Claude verdicts, so it costs nothing).
+- `/script.html` is the printable speaker sheet: timings for each slide and demo step (about 9:30 in all),
+  what to click, and 12 likely judge questions with answers. The text lives in `static/script-data.js`.
+
+The interface is interactive: drag the **shift timeline** to move the clock, click a stat tile to jump to what
+it counts, watch arrival toasts while the clock plays, search the queue, and see messages flow to the triage
+centre on the NT map. Keyboard: `Space` play/pause, `1`-`9` switch tabs. The website never names the AI vendor;
+it says "AI".
+
+The **How It Works** tab follows one real message from its channel through the checks to a named team and
+the escalation ladder, and replays as an animation. Use it as demo step 2.
+
+---
+
+## The report
+
+`report/DataChallenge_Team AIC023_Report.pdf` is the written report (PDF, A4, Arial, 8 body pages plus references and
+appendices). It is interactive: sidebar bookmarks, a clickable contents list, citations that jump to the reference,
+and source links. Every number in it is read from the running system, not typed:
+
+```
+python report/collect_results.py before   # without the second-opinion floor
+python report/collect_results.py after    # current system
+python report/figures.py
+python report/build_report.py
+```
+
+The benchmark's AI verdicts are real: `python scripts/run_llm_batch.py` ran all 152 messages through the Claude API once
+and saved them to `data/llm_results.json`.
+
+---
+
+## Older demo script (≈5 minutes)
 
 1. **The problem (30s).** Press **NEW SHIFT**: a wet-season shift of ~55 freshly generated messages,
    most of them routine, about 7 life or death. Nobody (including us) knows in advance which ones;

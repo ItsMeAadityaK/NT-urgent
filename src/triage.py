@@ -15,6 +15,11 @@ signal is combined here in a fixed, explainable order:
                       a message in a language we don't understand is never buried.
   3. ACCESS WEIGHT  — how reachable the sender is (access_scoring.py) can
                       raise it further, never lower it.
+  4. SECOND-OPINION FLOOR — if the backup model thinks a message is high or critical
+                      but the AI model rated it lower, the final priority is at least
+                      'high', so a person reads it. Two readers disagreeing towards
+                      "urgent" is itself a reason to look. It is a plain minimum, applied
+                      after access weighting. (TRIAGE_SECOND_OPINION_FLOOR=0 switches it off.)
 
 Nothing in this chain can lower a priority. Each step records what it did
 so the officer sees the full reasoning ("why was this prioritised this
@@ -22,11 +27,14 @@ way?"), and the escalation clock runs off the FINAL priority, so the
 colour on screen and the timer always agree.
 """
 
+import os
+
 from access_scoring import apply_access_weighting
 from language_check import check_readable
 from safety_net import check_safety_net
 
 URGENCY_LEVELS = ["low", "medium", "high", "critical"]
+SECOND_OPINION_FLOOR = os.environ.get("TRIAGE_SECOND_OPINION_FLOOR", "1") != "0"
 
 
 def _max(a: str, b: str) -> str:
@@ -54,13 +62,13 @@ def decide_priority(text: str, access_status: str, llm_result: dict | None, base
     if llm_ok:
         content = llm_result["urgency_score"]
         source = "llm"
-        steps.append(f"LLM classified the content as '{content}': {llm_result.get('flag_reason', '')}")
+        steps.append(f"The AI model classified the content as '{content}': {llm_result.get('flag_reason', '')}")
     else:
         content = baseline_urgency
         source = "baseline"
-        why = (llm_result or {}).get("error", "LLM offline")
-        steps.append(f"LLM unavailable ({why}) — DEGRADED MODE: local baseline model classified the "
-                     f"content as '{content}'. Not LLM-checked; officer should read it in full.")
+        why = (llm_result or {}).get("error", "AI offline")
+        steps.append(f"AI model unavailable ({why}) — DEGRADED MODE: local baseline model classified the "
+                     f"content as '{content}'. Not AI-checked; officer should read it in full.")
 
     safety = check_safety_net(text)
     floored = _max(content, safety["floor"])
@@ -80,12 +88,22 @@ def decide_priority(text: str, access_status: str, llm_result: dict | None, base
     final = access["access_adjusted_priority"]
     steps.append(access["reason"])
 
+    # Second-opinion floor. Applied last, so it is a plain minimum ("at least high") and is never
+    # stacked on top of the access bump: a routine complaint should not jump two levels.
+    if (SECOND_OPINION_FLOOR and llm_ok and URGENCY_LEVELS.index(baseline_urgency) >= URGENCY_LEVELS.index("high")
+            and URGENCY_LEVELS.index(content) < URGENCY_LEVELS.index("high")):
+        raised = _max(final, "high")
+        if raised != final:
+            steps.append(f"The backup model rates this '{baseline_urgency}' but the AI model said '{content}'. "
+                         f"When the two disagree towards urgent, it is held at 'high' until a person has read it.")
+            final = raised
+
     # Second opinion: flag (don't act on) cases where the baseline rates it
     # higher than the LLM did, so the officer can take a second look.
     second_opinion = None
     if llm_ok and URGENCY_LEVELS.index(baseline_urgency) > URGENCY_LEVELS.index(content):
         second_opinion = (f"Second opinion: the baseline model rates this '{baseline_urgency}', higher than "
-                          f"the LLM's '{content}'. Worth a second look.")
+                          f"the AI model's '{content}'. Worth a second look.")
 
     return {
         "content_urgency": content,

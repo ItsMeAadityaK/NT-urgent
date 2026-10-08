@@ -13,7 +13,7 @@ to know in one read what drove the call and who owns it.
 def headline(decision: dict, route: dict) -> str:
     parts = []
 
-    src = "LLM" if decision["content_source"] == "llm" else "baseline (LLM offline)"
+    src = "AI" if decision["content_source"] == "llm" else "baseline (AI offline)"
     parts.append(f"{src} said {decision['content_urgency']}")
 
     if decision["safety_floor"] and decision["after_safety_net"] != decision["content_urgency"]:

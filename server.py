@@ -117,12 +117,12 @@ def _load_llm_results():
         with open(LLM_RESULTS_PATH) as f:
             payload = json.load(f)
         results = {mid: {"ok": True, **r} for mid, r in payload["results"].items()}
-        label = f"Real Claude outputs ({payload['model']}, cached run {payload['generated_at'][:10]})"
+        label = f"Real AI outputs ({payload['model']}, cached run {payload['generated_at'][:10]})"
         return results, label, True
     results = {m["message_id"]: {"ok": True, "urgency_score": m["llm_urgency"], "flag_reason": m["llm_reason"]}
                for m in _MESSAGES}
     label = ("Hand-authored stand-in values (not a live model) — run scripts/run_llm_batch.py "
-             "with an API key to replace them with real Claude outputs")
+             "with an API key to replace them with real AI outputs")
     return results, label, False
 
 
@@ -299,7 +299,7 @@ def _llm_for_messages(messages: list, allow_live: bool = True) -> dict:
 
     for m in todo:
         why = ("no API key configured on this server" if not llm_configured()
-               else "not fetched yet (press NEW SHIFT to have Claude judge this shift)")
+               else "not fetched yet (press NEW SHIFT to have the AI judge this shift)")
         out.setdefault(m["message_id"], {"ok": False, "error": why})
     return out
 
@@ -323,11 +323,11 @@ def _evaluate_shift(messages: list, static: dict, llm: dict) -> dict:
 
     if llm_all:
         cached = sum(1 for i in ids if llm[i].get("cached"))
-        source = (f"Real Claude verdicts on this shift ({len(ids) - cached} fetched live, {cached} replayed from cache)")
+        source = (f"Real AI verdicts on this shift ({len(ids) - cached} fetched live, {cached} replayed from cache)")
     elif n_ok:
-        source = f"Real Claude verdicts for only {n_ok} of {len(ids)} messages (the rest failed), so the LLM rows are omitted"
+        source = f"Real AI verdicts for only {n_ok} of {len(ids)} messages (the rest failed), so the AI rows are omitted"
     else:
-        source = "No LLM verdicts for this shift (no API key, or the calls failed). Only the baseline and safety net are scored."
+        source = "No AI verdicts for this shift (no API key, or the calls failed). Only the baseline and safety net are scored."
 
     rows = []
     if llm_all:
@@ -590,7 +590,7 @@ def _build_state(minutes_elapsed: int, llm_online: bool):
         "sim_max_minutes": SIM_MAX_MINUTES,
         "llm_online": llm_online,
         "llm_live_configured": llm_configured(),
-        "llm_usage": {"live_calls": _LLM_USAGE["live_calls"], "limit": LLM_CALL_LIMIT},
+        "llm_usage": {"live_calls": _LLM_USAGE["live_calls"], "limit": LLM_CALL_LIMIT, "model": MODEL},
         "messages": processed,
         "fairness_pairs": [{"pair_id": pid, **sides} for pid, sides in sorted(fairness_pairs.items())],
         "time_to_human": time_to_human,
@@ -726,6 +726,9 @@ def api_classify():
 
     return jsonify({
         "priority": decision["access_adjusted_priority"],
+        "content_urgency": decision["content_urgency"],
+        "safety_floor": decision["safety_floor"],
+        "access_status": access,
         "headline": headline(decision, route),
         "steps": decision["steps"],
         "degraded": decision["degraded"],

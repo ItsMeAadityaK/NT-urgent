@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speaker Sheet — NT Correspondence Triage</title>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#191B20; --soft:#5B5F68; --line:#E7E1D5; --accent:#C1440E; --paper:#F5F2EC; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Public Sans', sans-serif; line-height: 1.5; }
+  main { max-width: 820px; margin: 0 auto; padding: 36px 24px 80px; }
+  h1 { margin: 0 0 4px; font-size: 1.7rem; }
+  .sub { color: var(--soft); margin: 0 0 24px; }
+  .tools { display: flex; gap: 10px; margin-bottom: 26px; }
+  button { font: inherit; font-weight: 600; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+  .step { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; margin-bottom: 14px; break-inside: avoid; }
+  .step-h { display: flex; align-items: baseline; gap: 12px; }
+  .step-h .n { font-family: 'Space Mono', monospace; color: var(--accent); font-weight: 700; }
+  .step-h h2 { margin: 0; font-size: 1.1rem; flex: 1; }
+  .step-h .t { font-family: 'Space Mono', monospace; font-size: 0.8rem; color: var(--soft); }
+  ul { margin: 10px 0 8px; padding-left: 20px; }
+  li { margin: 3px 0; }
+  .do { font-size: 0.9rem; color: #7A4B00; background: #FFF3D6; border-radius: 6px; padding: 6px 10px; }
+  .do b { font-family: 'Space Mono', monospace; font-size: 0.7rem; margin-right: 6px; }
+  h3 { margin: 34px 0 10px; }
+  .qa { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; break-inside: avoid; }
+  .qa b { display: block; margin-bottom: 4px; }
+  .qa span { color: var(--soft); font-size: 0.93rem; }
+  .keys { color: var(--soft); font-size: 0.88rem; }
+  .step.demo { border-left: 4px solid var(--accent); }
+  @media print { body { background: #fff; } .tools { display: none; } .step, .qa { border-color: #bbb; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Speaker sheet</h1>
+  <p class="sub">NT Correspondence Triage &middot; PowerPoint + live demo in 10 minutes, then 5 minutes Q&amp;A &middot; <span id="total"></span></p>
+  <div class="tools"><button onclick="window.print()">Print / save as PDF</button></div>
+  <p class="keys">Deck: <b>presentation/NT-Triage-Deck.pptx</b> (6 slides, notes inside). Demo site: <b>http://127.0.0.1:5050</b>, opened on seed 2026 (free, no AI credit). Before you start: set the clock to +60 and Acting as Officer.</p>
+  <div id="steps"></div>
+  <p class="keys" id="extra"></p>
+  <h3>Likely questions</h3>
+  <div id="qa"></div>
+</main>
+<script src="script-data.js"></script>
+<script>
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const mm = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  let at = 0;
+  document.getElementById("total").textContent = "total " + mm(TALK.reduce((a, s) => a + s.secs, 0));
+  document.getElementById("steps").innerHTML = TALK.map((s) => {
+    const start = at; at += s.secs;
+    const tag = s.part === "demo" ? "DEMO" : "SLIDES";
+    return `<section class="step ${s.part}"><div class="step-h"><span class="n">${tag}</span><h2>${esc(s.title)}</h2>
+      <span class="t">${mm(start)} &rarr; ${mm(at)} (${s.secs}s)</span></div>
+      <ul>${s.say.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
+      ${s.do ? `<div class="do"><b>DO</b>${esc(s.do)}</div>` : ""}</section>`;
+  }).join("");
+  document.getElementById("extra").textContent = TALK_EXTRA.join(" ");
+  document.getElementById("qa").innerHTML = QA.map(([q, a]) => `<div class="qa"><b>${esc(q)}</b><span>${esc(a)}</span></div>`).join("");
+</script>
+</body>
+</html>

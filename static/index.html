@@ -6,6 +6,7 @@
 <title>NT Correspondence Triage — Dispatch Console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%2314171D%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%273.5%27 fill=%27%23C1440E%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%278%27 fill=%27none%27 stroke=%27%23C1440E%27 stroke-width=%271.8%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2712%27 fill=%27none%27 stroke=%27%23C1440E%27 stroke-opacity=%27.45%27 stroke-width=%271.8%27/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,11 +15,9 @@
   <div class="masthead-inner">
     <header class="dispatch-header">
       <div class="header-left">
-        <div class="brand"><span class="brand-mark" aria-hidden="true"></span>NT CORRESPONDENCE TRIAGE</div>
+        <div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><circle class="lg-ring" cx="16" cy="16" r="10"/><circle class="lg-core" cx="16" cy="16" r="3.6"/><circle class="lg-r1" cx="16" cy="16" r="8"/><circle class="lg-r2" cx="16" cy="16" r="12.5"/></svg>NT CORRESPONDENCE TRIAGE</div>
         <h1>Every urgent message reaches a person. <span class="build-tag">Fast.</span></h1>
-        <p class="subtitle">Wet-season correspondence unit — every message is classified, routed and given a
-        plain-English reason. Anything serious goes to a named human, and escalates again if nobody picks it up.
-        <strong>The system never replies to the public by itself.</strong></p>
+        <p class="subtitle">Classified, routed, explained, and escalated if nobody acts. <strong>It never replies to the public by itself.</strong></p>
       </div>
 
       <div class="header-right">
@@ -31,36 +30,35 @@
     </header>
 
     <div class="control-bar">
-      <button id="playBtn" class="ctrl-btn" title="Auto-advance the clock">&#9654; PLAY</button>
-      <input type="range" id="clockSlider" min="0" max="480" step="15" value="60" aria-label="Simulation clock">
-      <span class="ctrl-readout" id="minutesReadout">+60 min</span>
-      <select id="speedSelect" class="ctrl-select" title="Auto-advance speed" aria-label="Speed">
-        <option value="900">1x</option>
-        <option value="450">2x</option>
-        <option value="150" selected>6x</option>
-      </select>
-      <button id="llmBtn" class="ctrl-btn llm-btn" title="Simulate the LLM being unavailable (API outage / no connectivity)">LLM: ONLINE</button>
-      <button id="resetBtn" class="ctrl-btn ghost" title="Clear all officer actions">RESET</button>
-      <label class="role-pick" title="Who you are acting as. Every action is recorded against this role, and the alert panel shows this role's desk.">ACTING AS
-        <select id="roleSelect" class="ctrl-select" aria-label="Acting as">
-          <option>Officer</option>
-          <option>Shift supervisor</option>
-          <option>Duty manager</option>
+      <div class="cb-row">
+        <button id="playBtn" class="ctrl-btn" title="Auto-advance the clock (Space)">&#9654; PLAY</button>
+        <div id="timeline" class="timeline" tabindex="0" role="slider" aria-label="Shift timeline: drag to move the clock"
+             aria-valuemin="0" aria-valuemax="480" aria-valuenow="60"></div>
+        <input type="range" id="clockSlider" class="sr-only" min="0" max="480" step="15" value="60" aria-label="Simulation clock" tabindex="-1">
+        <span class="ctrl-readout" id="minutesReadout">+60 min</span>
+        <select id="speedSelect" class="ctrl-select" title="Auto-advance speed" aria-label="Speed">
+          <option value="900">1x</option>
+          <option value="450">2x</option>
+          <option value="150" selected>6x</option>
         </select>
-      </label>
-      <span class="shift-controls">
-        <input id="seedInput" class="seed-input" type="text" inputmode="numeric" maxlength="9" placeholder="seed (optional)"
-               aria-label="Shift seed" title="Leave empty for a random shift. Type a seed to replay a shift exactly.">
-        <button id="newShiftBtn" class="ctrl-btn" title="Generate a brand-new set of messages. With an API key, a seed you have never run costs about 25 cents of credit (55 Claude calls); a seed you have run before is free.">NEW SHIFT</button>
-      </span>
-    </div>
-
-    <div id="shiftNote" class="shift-note"></div>
-
-    <div id="degradedBanner" class="degraded-banner" hidden>
-      <strong>LLM OUTAGE (SIMULATED).</strong> Every item is being triaged in degraded mode: the local baseline
-      model plus deterministic safety tripwires plus access weighting. Items are marked "NOT LLM-CHECKED".
-      Urgent messages still reach a human; see the Evaluation tab for how many.
+        <span class="shift-controls">
+          <input id="seedInput" class="seed-input" type="text" inputmode="numeric" maxlength="9" placeholder="seed"
+                 aria-label="Shift seed" title="Leave empty for a random shift. Type a seed to replay a shift exactly.">
+          <button id="newShiftBtn" class="ctrl-btn" title="Generate a brand-new set of messages. With an API key, a seed you have never run costs about 25 cents of credit (55 AI calls); a seed you have run before is free.">NEW SHIFT</button>
+        </span>
+      </div>
+      <div class="cb-row cb-secondary">
+        <div id="shiftNote" class="shift-note"></div>
+        <span class="cb-spacer"></span>
+        <label class="role-pick" title="Who you are acting as. Every action is recorded against this role, and the alert panel shows this role's desk.">ACTING AS
+          <select id="roleSelect" class="ctrl-select" aria-label="Acting as">
+            <option>Officer</option>
+            <option>Shift supervisor</option>
+            <option>Duty manager</option>
+          </select>
+        </label>
+        <button id="resetBtn" class="ctrl-btn ghost" title="Clear all officer actions">RESET</button>
+      </div>
     </div>
 
     <section id="attention" class="attention"></section>
@@ -72,7 +70,9 @@
 <section class="stat-row" id="statRow"></section>
 
 <nav class="view-tabs">
+  <span class="tab-indicator" id="tabIndicator" aria-hidden="true"></span>
   <button class="tab-btn active" data-view="queue">Message Queue</button>
+  <button class="tab-btn" data-view="journey">How It Works</button>
   <button class="tab-btn" data-view="map">NT Map</button>
   <button class="tab-btn" data-view="try">Try a Message</button>
   <button class="tab-btn" data-view="compare">Evaluation</button>
@@ -87,6 +87,7 @@
     <div class="queue-toolbar">
       <div id="priorityFilter" class="priority-filter" role="group" aria-label="Filter by priority"></div>
       <select id="teamFilter" class="ctrl-select" aria-label="Filter by team"></select>
+      <input id="queueSearch" class="search-box" type="search" placeholder="Search messages, places, teams…" aria-label="Search the queue">
       <span class="queue-meta" id="queueMeta"></span>
     </div>
 
@@ -100,29 +101,38 @@
 
   </section>
 
+  <section id="view-journey" class="view">
+    <div class="jr-head">
+      <div>
+        <h3>Follow one message</h3>
+        <p class="view-note">From arrival to a named human. Real data from the shift on screen.</p>
+      </div>
+      <div class="jr-controls">
+        <select id="journeyPick" class="ctrl-select" aria-label="Choose a message"></select>
+        <button id="journeyReplay" class="ctrl-btn">&#8635; REPLAY</button>
+      </div>
+    </div>
+    <div id="journeyStage"></div>
+  </section>
+
   <section id="view-acked" class="view">
     <div class="queue-section-head">
       <h4>Acknowledged by an officer <span class="section-count muted" id="ackCount">0</span></h4>
-      <span class="view-note">Most recently acknowledged first</span>
+      <span class="view-note">Most recent first &middot; no longer escalating</span>
     </div>
-    <p class="view-note">Items an officer has picked up. They've stopped escalating, but the full reasoning and
-    draft reply are still here, and drafts can still be approved.</p>
     <div id="ackedList"></div>
   </section>
 
   <section id="view-activity" class="view">
-    <p class="view-note">The audit trail: every action by an officer, shift supervisor or duty manager, and every automatic
-    escalation the system made, newest first. Use <strong>Acting as</strong> at the top to choose who you are; whatever you
-    do is recorded against that role.</p>
+    <p class="view-note">Every officer action and automatic escalation, newest first. Choose who you are with
+    <strong>Acting as</strong> at the top.</p>
     <div id="activityFilter" class="chip-row" role="group" aria-label="Filter by who acted"></div>
     <div id="activityList"></div>
   </section>
 
   <section id="view-welfare" class="view">
-    <p class="view-note">When someone reports something serious and then goes silent, the silence itself is treated
-    as a warning sign: their phone may have died, the network may be down, or things may have got worse. Those senders
-    are flagged in "Needs a human now" at the top of the page, where an officer logs the welfare check. This tab is the
-    record of checks made: who logged each one, their note, and whether the sender has been in touch since.</p>
+    <p class="view-note">A sender who reports something serious and then goes silent may be in trouble. They are
+    flagged in &ldquo;Needs a human now&rdquo;; this is the record of checks made.</p>
 
     <div class="queue-section">
       <div class="queue-section-head">
@@ -134,11 +144,10 @@
   </section>
 
   <section id="view-map" class="view">
-    <p class="view-note">Schematic layout of the Northern Territory, Top End to Central Australia.
-    Relative positions only, not to scale. Pin colour shows the highest open priority at that location. A pulsing
-    ring means something there has escalated or a sender has gone silent.</p>
+    <p class="view-note">Schematic map, not to scale. Pin colour is the highest open priority; a pulsing ring
+    means an escalation or a silent sender.</p>
     <div class="map-wrap">
-      <svg id="ntMap" viewBox="0 0 500 900" xmlns="http://www.w3.org/2000/svg"></svg>
+      <svg id="ntMap" viewBox="0 0 660 900" xmlns="http://www.w3.org/2000/svg"></svg>
       <div class="map-side">
         <div class="legend">
           <div class="legend-row"><span class="dot" style="--c:#D7263D"></span>Critical</div>
@@ -153,10 +162,9 @@
   </section>
 
   <section id="view-try" class="view">
-    <h3>Triage any message, live</h3>
-    <p class="view-note">Type or paste anything. It runs through the same pipeline as the queue: LLM (if a key
-    is configured), baseline model, safety tripwires, access weighting, routing and a draft acknowledgement.
-    Try the prompt-injection example: the text tells the AI to ignore it, and the safety net still catches it.</p>
+    <h3>Try a message</h3>
+    <p class="view-note">Runs the full pipeline live: AI, baseline model, safety rules, access weighting,
+    routing and a draft reply. Try the prompt-injection example.</p>
     <div id="tryExamples" class="chip-row"></div>
     <textarea id="tryText" rows="4" placeholder="e.g. water coming in the house fast, got the kids, road is cut"></textarea>
     <div class="try-controls">
@@ -181,24 +189,27 @@
   </section>
 
   <section id="view-compare" class="view">
-    <h3>Does an urgent message reach a human? Measured, not assumed.</h3>
+    <h3>Does every urgent message reach a human?</h3>
     <div id="evalPrimary"></div>
     <div id="evalBenchmark"></div>
     <div id="compareTableWrap"></div>
   </section>
 
   <section id="view-fairness" class="view">
-    <h3>Formal vs informal phrasing: does urgency detection stay consistent?</h3>
-    <p class="view-note">Matched pairs: each one describes the same situation, from the same place with the same
-    access, written two ways: once informally (SMS style) and once in formal written English. A fair system gives
-    both halves of a pair the same priority. If it doesn't, that's a real finding to report, not a bug to hide.</p>
-    <div id="fairnessPairs"></div>
+    <h3>Does writing style change the priority?</h3>
+    <p class="view-note">Each pair is one situation written informally and formally. A fair system gives both the same priority.</p>
     <div id="fairnessSummary"></div>
+    <div id="fairnessPairs"></div>
   </section>
 </main>
 
 </div><!-- /.page-body -->
 
+<div id="miniBar" class="mini-bar" aria-hidden="true"></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
 <script src="app.js"></script>
+<script src="journey.js"></script>
+<script src="fx.js"></script>
 </body>
 </html>
