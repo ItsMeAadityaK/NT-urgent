@@ -1,335 +1,161 @@
-# Correspondence Triage — Dispatch Console
+# NT Correspondence Triage
 
-**CDU IT Code Fair 2026 · AI Challenge · Brief #5: Getting urgent messages to a human, fast**
+**Team AIC023 · CDU IT Code Fair 2026 · AI Challenge, Brief 5: "Getting urgent messages to a human, fast"**
 
-> **How might we** make sure a vulnerable person's urgent message never gets buried in a
-> high-volume government inbox and reaches a human quickly?
+> How might we make sure a vulnerable person's urgent message never gets buried in a high-volume government
+> inbox and reaches a human quickly?
 
-A working triage console for an NT government correspondence/complaints unit during a
-wet-season event. It classifies every incoming item, detects urgency, routes it to the right
-team, drafts an acknowledgement and explains each decision in plain English. Anything serious
-goes to a named human and keeps escalating until someone picks it up.
+A working triage console for a Northern Territory government correspondence unit in the wet season. It sorts
+every message into low, medium, high or critical, explains the call in plain English, routes it to a team, drafts
+an acknowledgement, and **escalates to a named person if nobody acts. It never replies to the public by itself**
+(a test checks that no code path can).
 
-**Trust twist, built in:** the system never replies to the public. Every draft waits for an
-officer's approval, and every escalation goes to a person, never to an automated response.
-
----
-
-## The brief, point by point
-
-| Brief asks for | What we built | Where |
-|---|---|---|
-| Classification + urgency detection | Claude LLM classifier (structured JSON output) + local TF‑IDF baseline + deterministic safety tripwires, combined in a fixed order where **nothing can lower a priority** | `src/classifier.py`, `baseline_model.py`, `safety_net.py`, `triage.py` |
-| Routes and prioritises | Access-aware priority (a sender who is cut off is bumped up) and rule-based routing to one of 10 teams. Critical items also copy in the Duty Officer | `access_scoring.py`, `routing.py` |
-| Drafts acknowledgements | Template drafts per priority and channel, **never auto-sent**. Personal-safety drafts use safety-aware wording that doesn't repeat what was reported | `acknowledgement.py` |
-| Explanation for each call | One-line "Why:" on every item, plus the full step-by-step reasoning, routing rule, both models' outputs and matched tripwires | `explain.py`, `triage.py` |
-| Escalation path is the design goal | Dead-man's switch: critical 15 min → shift supervisor, then duty manager at 2× the limit. A "Needs a human now" panel is pinned to the top, and silent senders are flagged for a welfare check | `escalation.py`, `dropout_detector.py` |
-| Escalate, never respond | No code path sends anything (a test checks this). Drafts need an officer's click | `tests/test_safety.py` |
+Urgency comes from three readers that can only ever *raise* a priority: the **Claude API**, a small **baseline ML
+model** trained on our data, and **fixed safety rules**. Senders cut off by floods are raised further, and text
+the system cannot read goes to an interpreter desk instead of sinking to the bottom.
 
 ---
 
-## Design principles (the "why" behind the build)
+## What is in this submission
 
-1. **Asymmetric errors.** Over-escalating costs an officer a few minutes. Under-escalating can
-   cost a person help. So every step in the pipeline can only *raise* a priority, and the LLM
-   is told to pick the more urgent level when unsure.
-2. **Fail loud, fail up.** If the LLM errors, times out, declines or returns junk, the item is
-   marked *NOT LLM-CHECKED* and triaged by the baseline plus safety net. It never silently
-   defaults to "medium". (The earlier version did exactly that on a parse error.)
-3. **Defence in depth.** Three independent signals:
-   - the **LLM** understands context and informal writing;
-   - the **baseline model** runs offline;
-   - the **safety tripwires** can be audited line by line and can't be prompt-injected.
+| Item | Where |
+|---|---|
+| Project report (PDF and editable Word) | `report/AIChallenge_Team AIC023_Report.pdf`, `.docx` |
+| Presentation slides (+ static PDF copy) | `presentation/NT-Triage-Deck-v2.pptx`, `NT-Triage-Deck-handout.pdf` |
+| Source code (Python, commented at the key steps) | `src/`, `server.py`, `scripts/`, `tests/` |
+| Web console (HTML, CSS, JavaScript) | `static/` |
+| Data (synthetic, written by us) and saved AI answers | `data/` |
+| Reproduction instructions | this file |
 
-   If any one of them catches a message, it can't be buried.
-4. **Works when the network doesn't.** Wet-season outages are the NT's reality. Toggle
-   **LLM: OUTAGE** in the console: every critical message still reaches a human (measured below).
-5. **Human owns the decision.** The AI sorts, explains and drafts. A person acknowledges,
-   approves and responds.
+**Data sources.** There is no external dataset. All messages are synthetic and were written by the team:
+`data/messages.py` (152 hand-written benchmark messages), `src/generator.py` (a seeded generator of 55-message
+shifts) and `data/language_standins.py` (invented letter-swapped text, not a real language). Real-world
+statistics and policy sources are cited, with links, in the report's reference list.
 
 ---
 
-## Pipeline
+## Quick start (about two minutes, no API key needed)
 
-```
- message ─┬─► Claude LLM ────────────┐  content urgency (LLM, or baseline if LLM is down)
-          ├─► TF-IDF baseline ───────┤
-          └─► safety tripwires ──────┼─► raise to safety floor ─► raise for access (cut-off/limited)
- access status ──────────────────────┘                                   │
-                                                                          ▼
-                       routing (team + Duty Officer cc) ─► draft acknowledgement (awaits officer)
-                                                                          │
- sim clock + officer acks ─► escalation chain: supervisor → duty manager  │
- sender history ───────────► comms-dropout: "sender went silent" → welfare check
-```
-
----
-
-## Results: measured, not assumed
-
-All 152 messages, scored against the ground-truth `true_urgency` label. **Urgent recall** means:
-of the messages that really are high/critical, how many landed in the fast lane? That's the
-brief's failure mode, so it's the headline number.
-
-| Approach | Exact accuracy | Urgent recall | Critical recall | Routine items pushed to fast lane |
-|---|---|---|---|---|
-| Baseline alone (5-fold cross-validated) | 70% | 85% | 52% | 9 / 97 |
-| Safety tripwires alone | — | 65% | 70% | 0 / 97 |
-| **Full pipeline, LLM OUTAGE** (baseline + tripwires + access) | — | **98%** | **100%** | 12 / 97 |
-| Full pipeline, LLM online | — | 100%* | 100%* | 5 / 97 |
-
-\* See the honesty notes below. The live console's **Evaluation** tab regenerates this table.
-
-**What it shows:** the baseline alone misses half of the critical messages. Layering the
-tripwires and access weighting on top closes that gap to zero missed critical items, even with
-the LLM completely offline. The cost is 12 routine items (of 97) getting a faster look than they
-needed.
-
-**Fairness audit:** five formal/informal pairs describing identical situations. The baseline is
-inconsistent on 2 of 5. On FP1 it actually rates the *formal* version lower (medium vs critical).
-The **final priority is consistent on 5 of 5**, because the tripwires and access weighting stop
-writing style from changing the outcome.
-
-### Honesty notes (read before quoting numbers)
-
-- **LLM row.** Until `scripts/run_llm_batch.py` is run with an API key, the LLM values are
-  hand-authored stand-ins that match the answer key by construction. The console says so
-  prominently. Run the script (a few cents) to replace them with real Claude outputs, and the
-  numbers become a genuine measurement.
-- **Tripwires** were written by the team with this dataset in view, so their recall here is
-  optimistic. The baseline numbers are clean: every prediction shown is out-of-fold, from a model
-  that never saw that message.
-- **Synthetic data.** The 152 messages are synthetic (see `data/messages.py` for the design
-  rationale). Real deployment would need evaluation on real, consented correspondence.
-- **Generated shifts are optimistic.** The live shifts (below) are built from templates we wrote, so
-  their wording overlaps in theme with what the baseline trained on. Their scores sit next to, never
-  instead of, the hand-written benchmark above, and the Evaluation tab says so.
-
----
-
-## Live shifts: new messages every time
-
-The queue no longer shows the same 152 messages every run. By default it shows a **live shift**: about
-55 freshly generated messages (`src/generator.py`), arriving front-loaded like a real storm morning.
-
-- **NEW SHIFT** makes a different shift each press. The seed is shown on screen; type a seed into the
-  box and press NEW SHIFT (or Enter) to replay a shift exactly. `SHIFT_SEED=1234 python3 server.py`
-  sets the first one.
-- **True urgency is a hidden answer key.** Messages are created with a secret label that the queue never
-  shows and no classifier sees. It is only used to score the system afterwards (Evaluation tab). A test
-  checks that flipping every label changes no priority.
-- **Variety comes from independent random pieces**: situation, who and how long, writing style
-  (formal, SMS, rambling, ALL CAPS), and noise (typos, `u`/`2`/`pls` shorthand, voice-to-text mistakes),
-  across 58 scenarios and ~180 templates. The mix is deliberately mostly routine, about 13% critical.
-- **Every shift contains the cases worth demonstrating**: a flooded cut-off critical, a child alone, a
-  collapse, a medication risk, senders who go silent, a sender who follows up (dropout must *not* fire),
-  a routine message from an access-limited sender, and three formal/informal fairness pairs.
-- **Not copied from training data.** Templates were checked against the 152 the baseline trains on, and
-  a test fails if any is more than 80% similar to one of them.
-- **The 152 are still here** as the baseline's training data and an independent benchmark. The Evaluation
-  tab shows both. "Use the 152-message benchmark instead" (under the control bar) switches the queue to it.
-
-With a Claude key set, a new shift sends its ~55 messages to Claude once (a few cents), and the verdicts
-are cached in `data/llm_cache.json` by message text, so **replaying a seed is free and works offline**.
-Do this at home before a demo: run the seed you plan to present, and it replays with the real LLM
-verdicts even with no network. Without a key the shift runs honestly on baseline + safety net, every row
-is flagged NOT LLM-CHECKED, and no LLM verdict is ever invented.
-
-**Community phrases.** The generator never invents Kriol or Aboriginal-language text. If
-`data/community_phrases.json` exists, up to two entries are mixed into each shift. Each entry must be
-written or reviewed by a speaker or interpreter:
-`[{"text": "...", "true_urgency": "critical", "language": "Kriol", "source": "reviewed by ..."}]`.
-
----
-
-## Text the system can't read (other languages)
-
-Every layer of the triage works on English, so a message in Kriol or a traditional language looks like
-noise, and noise would normally rank LOW. `src/language_check.py` closes that hole: if a message is mostly
-words the system doesn't know *and* has almost none of the little connecting words of English (the, is, my),
-it can never rank below **high**, is flagged "language not recognised", is routed to an *Interpreter &
-community liaison* desk, and gets a draft that says nothing about its content. It only ever raises a priority.
-It does not know which language it is looking at, and very short messages are not judged.
-
-- **We do not write any Aboriginal language.** `data/language_standins.py` makes *invented* letter-swap text
-  (clearly not a real language) to test the mechanism, paired with the English each one stands in for.
-- `python scripts/language_parity.py` runs the test with the LLM off: before the rule, 8 of 8 urgent
-  stand-in messages were ranked below high; after it, 0 of 8. The cost: routine messages in an unreadable
-  language are also raised to high, because nobody can tell routine from urgent in a language we can't read.
-- **Real phrases** go in `data/community_phrases.json`, written or reviewed by a speaker or interpreter, each
-  with its `english_meaning`. They flow through the same test, and the script flags any real phrase ranked lower
-  than its English meaning.
-- **Fair to ordinary English:** no flag on 3,460 hand-written, typo-heavy and fresh English messages (tested).
-
-## Real inbound messages
-
-`POST /api/ingest` is where a real channel plugs in: an SMS gateway (a Twilio-style webhook posts `Body` and
-`From`), an email forwarder, or a web form. The message is triaged by the same pipeline and appears in the
-queue within a few seconds (the page checks every 4 seconds, which costs nothing). Set `INGEST_TOKEN` to
-require an `X-Ingest-Token` header.
-
-```bash
-curl -X POST http://127.0.0.1:5050/api/ingest -H "Content-Type: application/json"   -d '{"text":"my nan fell and cant get up, road is flooded","channel":"sms","from":"+61400111222","location":"Wadeye","access_status":"cut-off"}'
-```
-
-Not built (and said so plainly): connecting an actual SMS number or mailbox, a real wall-clock instead of the
-simulated clock, and saving officer actions to a database (they live in memory and reset on restart).
-
----
-
-## How to run it
+Python 3.10 or newer (developed on 3.12).
 
 ```bash
 pip install -r requirements.txt
-python3 server.py
+python -m pytest -q          # 97 tests, no network
+python server.py             # then open http://127.0.0.1:5050
 ```
 
-Open **http://127.0.0.1:5050**. (Not 5000: on macOS that port belongs to AirPlay Receiver.
-Override with `PORT=8000 python3 server.py`.)
+The console opens on a generated shift (seed 2026) and replays **saved real Claude API verdicts**
+(`data/llm_cache.json`, `data/llm_results.json`), so it works offline and spends nothing.
 
-Optional, to use real Claude outputs. Put your key in a file called `.env` in the project folder
-(it is already git-ignored, so it never reaches GitHub; never paste a key into any other file):
+Things to try:
+
+- **Message Queue**: press PLAY (or drag the timeline) and watch messages arrive. The dark "Needs a human now"
+  panel shows what is overdue or silent. Open a row for the full reasoning and the draft reply.
+- **How It Works**: pick a message and press REPLAY to see it travel through every check.
+- **Try a Message**: type anything. Try the "Prompt injection" and "Unreadable language (stand-in)" examples.
+- **Evaluation / Fairness Audit**: scores against a hidden answer key, and matched formal/informal pairs.
+- **NT Map**, **Welfare Checks**, **Activity Log**: where messages come from, silent senders, and who did what.
+- `?t=240` in the address opens the shift at +240 minutes; `#journey`, `#try`, `#compare` open a tab.
+
+Pressing **NEW SHIFT** with no seed generates brand-new messages and, if an API key is set, asks the Claude API to
+judge them (roughly 10 to 25 US cents). A seed that has been run before replays for free.
+
+## Using the live Claude API (optional)
+
+Put a key in a file called `.env` in the project folder (it is git-ignored; never paste a key anywhere else):
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
+Then `python server.py` reads it itself. Settings (environment variables): `TRIAGE_MODEL` (default
+`claude-sonnet-5-5`), `LLM_CALL_LIMIT` (hard cap on live calls, default 300), `SHIFT_SEED` (first shift),
+`PORT`, `INGEST_TOKEN`, `TRIAGE_SECOND_OPINION_FLOOR=0` (switch the second-opinion floor off),
+`TRIAGE_NO_DOTENV=1` (ignore `.env`). Without a key, rows are honestly marked *NOT AI-CHECKED* and triaged by the
+baseline model and the safety rules; no AI verdict is ever invented.
+
+`python scripts/run_llm_batch.py` classifies the 152 benchmark messages once with the real API and saves
+`data/llm_results.json` (already included).
+
+---
+
+## Reproducing the numbers in the report
+
+Every number in the report is read from the running system, not typed:
+
 ```bash
-python3 server.py                     # reads .env itself; "Try a message" and NEW SHIFT now call Claude
-python3 scripts/run_llm_batch.py      # optional: classify the 152 benchmark messages → data/llm_results.json
+python report/collect_results.py before     # without the second-opinion floor  -> report/results_before.json
+python report/collect_results.py after      # the current system                -> report/results_after.json
+python scripts/language_parity.py           # the unreadable-text test (8 of 8 urgent buried before, 0 after)
 ```
 
-The default model is Claude Sonnet 5.5 (`TRIAGE_MODEL=claude-haiku-4-5` for cheaper, or
-`claude-opus-5-5` for the most capable). Tests never read `.env`, so they cost nothing.
-
-Run the tests:
-
-```bash
-python3 -m pytest -q
-```
-
-93 tests cover the safety guarantees (nothing lowers a priority, prompt injection can't bury a
-flagged message, every critical message survives an LLM outage on the benchmark, escalation climbs,
-drafts always need approval, no module imports a message-sending library) and the generated shifts
-(replayable, varied, contain the demo cases, hidden labels never affect priority). Tests never call
-the API, whatever is in your shell.
+To rebuild the report itself (optional): `pip install -r requirements-report.txt`, then
+`python report/figures.py`, `python report/build_report.py` (PDF) and `python report/build_docx.py` (Word).
+`report/shots/` holds the interface screenshots used in the figures.
 
 ---
 
-## Presenting (10 minutes + Q&A)
+## How it works
 
-The talk is a short PowerPoint plus a live demo:
+```
+message ─► readers ──────────────────────────────┐  content urgency
+           Claude API (meaning, typos, slang)    │
+           baseline ML (TF-IDF + logistic regr.) ┤  (baseline only if the API is down)
+                                                 ▼
+        safety tripwires (61 patterns, 10 groups) → readability check (unreadable → at least high)
+                 → access weighting (limited +1, cut-off +2) → second-opinion floor (backup says
+                   high/critical, AI lower → at least high)
+                                                 ▼
+        final priority → route (12 teams) + draft reply (never sent) → officer
+        → clock: critical 15 min, high 60, medium 240 → shift supervisor → duty manager at twice the limit
+        → a sender who goes quiet is flagged for a welfare check
+```
 
-- `presentation/NT-Triage-Deck.pptx`: 7 slides plus 3 hidden backups (demo fallback, fairness and language, likely
-  questions). Dark "console" design, native chart, animations that play by themselves, a fade between slides, clickable
-  navigation dots, and a demo slide whose steps open the console on the right tab. Speaker notes with timings are in each
-  slide. `NT-Triage-Deck-handout.pdf` is a static copy. It is built by `presentation/build_deck.js`
-  (pptxgenjs) and then finished by `presentation/polish_deck.ps1`, which uses PowerPoint to add the animations and links.
-- The demo runs on this site, opened on seed 2026 (replays saved Claude verdicts, so it costs nothing).
-- `/script.html` is the printable speaker sheet: timings for each slide and demo step (about 9:30 in all),
-  what to click, and 12 likely judge questions with answers. The text lives in `static/script-data.js`.
+Design rules: nothing can lower a priority; if the AI fails the item is marked and the other layers carry on; the
+safety rules ignore instructions written inside a message; the AI sees the message as untrusted data.
 
-The interface is interactive: drag the **shift timeline** to move the clock, click a stat tile to jump to what
-it counts, watch arrival toasts while the clock plays, search the queue, and see messages flow to the triage
-centre on the NT map. Keyboard: `Space` play/pause, `1`-`9` switch tabs. The website never names the AI vendor;
-it says "AI".
+## Results (152 hand-written messages, real Claude API verdicts)
 
-The **How It Works** tab follows one real message from its channel through the checks to a named team and
-the escalation ladder, and replays as an animation. Use it as demo step 2.
+| Approach | Urgent caught (of 55) | Critical caught (of 23) | Routine escalated (of 97) |
+|---|---|---|---|
+| Backup ML model alone (5-fold cross-validation) | 47 (85.5%) | 12 (52.2%) | 9 |
+| Safety rules alone | 36 (65.5%) | 16 (69.6%) | 0 |
+| Claude API alone | 52 (94.5%) | 21 (91.3%) | 0 |
+| **Full system** | **54 (98.2%)** | **23 (100%)** | 10 |
+| Full system, Claude API switched off | 54 (98.2%) | 23 (100%) | 12 |
+
+Two generated shifts (seeds 2026, 4242) with real verdicts are in the report's appendix. These scores come from
+synthetic data we wrote, so real-world results will be lower; the report says so and recommends a shadow-mode pilot.
 
 ---
 
-## The report
-
-`report/AIChallenge_Team AIC023_Report.pdf` is the written report (PDF, A4, Arial, 8 body pages plus references and
-appendices). `report/AIChallenge_Team AIC023_Report.docx` is the same report as an editable Word file. It is interactive: sidebar bookmarks, a clickable contents list, citations that jump to the reference,
-and source links. Every number in it is read from the running system, not typed:
+## Repository layout
 
 ```
-python report/collect_results.py before   # without the second-opinion floor
-python report/collect_results.py after    # current system
-python report/figures.py
-python report/build_report.py   # the PDF
-python report/build_docx.py     # the Word version
+server.py                    Flask app and JSON API (state, acknowledge, classify, ingest, new shift)
+src/classifier.py            Claude API call: untrusted-data prompt, JSON schema, fails loud
+src/baseline_model.py        TF-IDF + logistic regression, out-of-fold predictions
+src/safety_net.py            deterministic tripwires (can only raise a priority)
+src/language_check.py        unreadable-text check -> interpreter desk
+src/triage.py                the single place a final priority is decided, with plain-English steps
+src/access_scoring.py        access weighting         src/routing.py          keyword routing to teams
+src/escalation.py            clocks and ladder        src/dropout_detector.py silent-sender check
+src/acknowledgement.py       draft replies (never sent)   src/generator.py     seeded shifts, hidden answer key
+data/                        benchmark, language stand-ins, saved Claude API answers
+static/                      the console (index.html, app.js, journey.js, fx.js, style.css) and /script.html
+scripts/                     run_llm_batch.py, language_parity.py
+tests/                       97 tests: safety guarantees, replayable shifts, language, inbound endpoint
+report/                      the report, its build scripts, figures and results
+presentation/                the deck and its build scripts
 ```
 
-The benchmark's AI verdicts are real: `python scripts/run_llm_batch.py` ran all 152 messages through the Claude API once
-and saved them to `data/llm_results.json`.
+`POST /api/ingest` is where a real channel (an SMS gateway, an email forwarder, a web form) would plug in; a
+message posted there is triaged by the same pipeline and appears in the queue within seconds.
 
----
+## Limitations and next steps
 
-## Older demo script (≈5 minutes)
-
-1. **The problem (30s).** Press **NEW SHIFT**: a wet-season shift of ~55 freshly generated messages,
-   most of them routine, about 7 life or death. Nobody (including us) knows in advance which ones;
-   the true urgency is a hidden answer key. Drag the clock back to the start of the shift.
-2. **The needle (60s).** Press **PLAY**. As the clock runs, criticals arrive and the 15-minute
-   clock starts. Unacknowledged items climb to *Shift supervisor* and then *Duty manager*. Open
-   a critical item → **full reasoning + draft reply**. Show the plain-English steps and the **safety-aware
-   draft** that doesn't repeat the disclosure, in case the person causing harm reads the phone.
-3. **Acknowledge (30s).** Click ACKNOWLEDGE. The item leaves the escalation panel and the
-   **time-to-human** tile updates. Scrub the clock backwards: the acknowledgement is time-aware.
-4. **Silence is a signal (30s).** At about +2h, senders who reported a critical situation and
-   then went quiet show **SENDER SILENT**. Log a welfare check.
-5. **Pull the plug (60s).** Click **LLM: ONLINE** to simulate an outage. Everything is re-triaged
-   in degraded mode and flagged *NOT LLM-CHECKED*. Open **Evaluation**: 100% of critical messages
-   still reach the fast lane.
-6. **Try to break it (60s).** **Try a Message** → *Prompt injection* example: the text tells the AI
-   it's low priority, and it still comes out CRITICAL → Duty Officer. Invite a judge to type
-   their own message.
-7. **Fairness (30s).** The Fairness tab shows the baseline marking a formal message *lower* than
-   its informal twin, while the final priority stays consistent.
-
----
-
-## Project structure
-
-```
-server.py                 Flask API + officer-action state (acks, draft approvals, welfare checks)
-src/triage.py             Final-priority decision: content → safety floor → access (raise-only)
-src/classifier.py         Claude classifier: structured output, injection-resistant, fails loud
-src/baseline_model.py     TF-IDF + logistic regression, 5-fold cross-validated
-src/safety_net.py         Deterministic tripwires (priority floors)
-src/access_scoring.py     Access-aware bump (normal / limited / cut-off)
-src/routing.py            Team routing, ordered most-serious-first
-src/acknowledgement.py    Draft replies: always need approval, safety-aware wording
-src/escalation.py         Dead-man's switch: supervisor → duty manager
-src/dropout_detector.py   "Sender went silent" detection
-src/explain.py            One-line "Why:" for each item
-src/evaluation.py         Recall-first scoring against ground truth
-src/generator.py          Seeded random shifts: scenarios x style x noise, hidden answer key
-src/language_check.py     Can the system read this message? Unreadable text never ranks below high
-scripts/run_llm_batch.py  One-off real Claude run over the dataset
-data/messages.py          152 hand-written messages: baseline training data + independent benchmark
-static/                   Hand-built dispatch-console frontend
-tests/test_safety.py      Safety-guarantee tests
-tests/test_shift.py       Generated-shift tests (replay, variety, demo cases, no leakage, credit guard)
-tests/test_language.py    Unreadable-language and inbound-endpoint tests
-```
-
----
-
-## Limitations and what production would need
-
-- **Real data and evaluation.** Retest on real, consented correspondence. The keyword tripwires
-  and routes need review by duty officers and a family-violence practitioner.
-- **Persistence and audit trail.** Officer actions are in memory (reset on restart). Production
-  needs a database, officer identity, and an immutable log of who saw, acknowledged and approved what.
-- **Channel ingestion.** Channels (SMS, email, webform, phone notes) are labelled, not ingested
-  from live systems.
-- **Access status** is supplied per message. In production it would come from road-closure and
-  outage feeds (e.g. NT Road Report) matched to the sender's location.
-- **Language.** Many NT residents speak an Aboriginal language or Kriol as their first language.
-  English-only tripwires will miss some messages, so production would need co-designed phrase
-  lists and interpreter pathways. This is the biggest open fairness question.
-- **Privacy.** Sending message text to an external LLM needs a privacy impact assessment and
-  data-residency review. The offline mode is also the privacy-preserving fallback.
-
-## Dataset
-
-`data/messages.py`: 152 synthetic messages simulating one high-volume wet-season shift
-(low 56 · medium 41 · high 32 · critical 23), deliberately skewed toward routine items because
-that skew *is* the needle-in-a-haystack problem. It covers one consistent weather event (Top End
-monsoon flooding, with no bushfires since those are dry-season), two geographic clusters (flood-hit
-Top End, unaffected Central Australia/Barkly), five like-for-like fairness pairs, and repeat
-senders who either go silent (should flag) or follow up (shouldn't).
+Synthetic data; a simulated clock; officer actions held in memory (no database); no live SMS or email feed;
+English-language text only; one AI model. Sending real messages to an external API needs a privacy impact
+assessment and Australian hosting first. No Aboriginal-language or Kriol text was invented anywhere; real phrase
+lists would have to come from speakers, under community control. The report's recommendations and roadmap set out
+what a real pilot would need.

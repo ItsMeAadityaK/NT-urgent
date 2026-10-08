@@ -1,4 +1,4 @@
-flask
-scikit-learn
-anthropic
-pytest
+flask>=3.0
+scikit-learn>=1.4
+anthropic>=1.9
+pytest>=8.0

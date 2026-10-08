@@ -47,11 +47,11 @@ foreach ($prop in $plan.PSObject.Properties) {
 }
 
 # ---- navigation dots jump to their slide
-for ($i = 1; $i -le 7; $i++) {
+for ($i = 1; $i -le 9; $i++) {
   $target = $pres.Slides.Item($i)
   $sub = "{0},{1},{2}" -f $target.SlideID, $target.SlideIndex, "Slide $i"
   foreach ($sl in $pres.Slides) {
-    if ($sl.SlideIndex -gt 7) { continue }
+    if ($sl.SlideIndex -gt 9) { continue }
     try {
       $sh = $sl.Shapes.Item("Nav $i")
       $sh.ActionSettings.Item(1).Hyperlink.Address = ""
@@ -64,7 +64,7 @@ for ($i = 1; $i -le 7; $i++) {
 $links = @(
   "$($base)?t=60#queue", "$($base)?t=90&msg=L003#journey", "$($base)#try", "$($base)?t=240#queue", "$($base)?t=480#compare"
 )
-$demo = $pres.Slides.Item(6)
+$demo = $pres.Slides.Item(8)
 for ($i = 1; $i -le 5; $i++) {
   foreach ($nm in @("Step $i", "Step $i text", "Step $i dot", "Step $i number")) {
     try {
@@ -91,11 +91,10 @@ function Add-Jump($slide, $label, $x, $y, $w, $toIndex) {
   $t = $pres.Slides.Item($toIndex)
   $tb.ActionSettings.Item(1).Hyperlink.SubAddress = "{0},{1},{2}" -f $t.SlideID, $t.SlideIndex, "Slide $toIndex"
 }
-Add-Jump $pres.Slides.Item(5) "Fairness, language and the floor  >" 400 342 300 9
-Add-Jump $pres.Slides.Item(6) "If the demo fails  >" 400 342 300 8
-Add-Jump $pres.Slides.Item(7) "Likely questions  >" 400 355 290 10
-foreach ($k in 8, 9, 10) {
-  Add-Jump $pres.Slides.Item($k) "<  Back to the close" 560 18 150 7
+Add-Jump $pres.Slides.Item(6) "Fairness, language and a late bug  >" 400 342 300 10
+Add-Jump $pres.Slides.Item(9) "Likely questions  >" 400 355 290 11
+foreach ($k in 10, 11) {
+  Add-Jump $pres.Slides.Item($k) "<  Back to the close" 560 18 150 9
   $pres.Slides.Item($k).SlideShowTransition.Hidden = -1
 }
 

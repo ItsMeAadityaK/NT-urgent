@@ -14,6 +14,7 @@ const fa = require("react-icons/fa");
 const HERE = __dirname;
 const R = JSON.parse(fs.readFileSync(path.join(HERE, "..", "report", "results_after.json"), "utf8"));
 const B = R.benchmark.rows;
+const BEF = JSON.parse(fs.readFileSync(path.join(HERE, "..", "report", "results_before.json"), "utf8")).benchmark.rows;
 
 // ---------------------------------------------------------------- palette and type
 const INK = "0E1116", PANEL = "161B23", RAISED = "1C222C", BORDER = "2A323E";
@@ -39,7 +40,7 @@ async function icon(Comp, color = "#FFFFFF") {
   pres.title = "NT Correspondence Triage";
   pres.author = "Team AIC023";
 
-  const TOTAL = 7;
+  const TOTAL = 9;
   let n = 0;
 
   // ---------------------------------------------------------------- helpers
@@ -103,7 +104,7 @@ async function icon(Comp, color = "#FFFFFF") {
     text(s, "One of these is an emergency.", { x: 5.25, y: 4.6, w: 3.9, h: 0.28, fontSize: 14, bold: true, color: AMBER, objectName: "Inbox callout" });
     anim(1, "Inbox row 6", "pulse", "after", 0.3, 0.8);
     anim(1, "Inbox callout", "fade", "after", 0.1, 0.5);
-    s.addNotes("HOOK, about 35 seconds.\nLet the inbox build by itself. Say: this is a normal morning in a government correspondence inbox. Bin days, receipts, thank-yous. And one of these is a woman telling us her mum has collapsed and the road is flooded.\nThen the line: our system exists so that message is never the 43rd thing someone reads.\nOne rule to plant now: it never replies by itself. It makes sure a named person sees the urgent ones, and chases them if they do nothing.");
+    s.addNotes("HOOK.\nLet the inbox build by itself. Say: this is a normal morning in a government correspondence inbox. Bin days, receipts, thank-yous. And one of these is a woman telling us her mum has collapsed and the road is flooded.\nThen the line: our system exists so that message is never the 43rd thing someone reads.\nOne rule to plant now: it never replies by itself. It makes sure a named person sees the urgent ones, and chases them if they do nothing.");
   }
 
   // ================================================================ 2. NT PROBLEM
@@ -130,7 +131,7 @@ async function icon(Comp, color = "#FFFFFF") {
         anim(2, nm, "fade", j === 0 ? "after" : "with", j === 0 ? 0.25 : 0, 0.5);
       });
     });
-    s.addNotes("THE PROBLEM, about 50 seconds.\nThree facts, not a lecture. 58.5% of First Nations people in the NT speak an Indigenous language at home, the highest share in Australia. 43% of First Nations communities and homelands have no mobile service. In 2025 the NT recorded 4,057 assault victims per 100,000 people against 917 nationally, two thirds family and domestic violence.\nSo the person we built for writes briefly, on a phone, maybe not in English, maybe with the road under water, and may not write twice.\nSources are on the slide and in the report.");
+    s.addNotes("THE PROBLEM.\nThree facts, not a lecture. 58.5% of First Nations people in the NT speak an Indigenous language at home, the highest share in Australia. 43% of First Nations communities and homelands have no mobile service. In 2025 the NT recorded 4,057 assault victims per 100,000 people against 917 nationally, two thirds family and domestic violence.\nSo the person we built for writes briefly, on a phone, maybe not in English, maybe with the road under water, and may not write twice.\nSources are on the slide and in the report.");
   }
 
   // ================================================================ 3. THE ANSWER
@@ -167,7 +168,7 @@ async function icon(Comp, color = "#FFFFFF") {
     ], { x: 0.85, y: 4.05, w: 8.3, h: 0.78, fontSize: 17, bold: true, valign: "middle", objectName: "Rule text" });
     anim(3, "Rule banner", "fade", "after", 0.2, 0.5);
     anim(3, "Rule text", "fade", "with", 0, 0.5);
-    s.addNotes("THE ANSWER, about 45 seconds.\nThe brief's trust twist is the whole design: the system escalates, it never replies. Walk the flow left to right as it builds itself: a message arrives; three readers judge it; the priority can only go up; it lands with a named person; a clock starts, 15 minutes for critical. If nobody acknowledges it, it climbs to the shift supervisor, then the duty manager.\nLand the banner: it drafts, a person approves, it never sends.");
+    s.addNotes("THE ANSWER.\nThe brief's trust twist is the whole design: the system escalates, it never replies. Walk the flow left to right as it builds itself: a message arrives; three readers judge it; the priority can only go up; it lands with a named person; a clock starts, 15 minutes for critical. If nobody acknowledges it, it climbs to the shift supervisor, then the duty manager.\nLand the banner: it drafts, a person approves, it never sends.");
   }
 
   // ================================================================ 4. THREE READERS
@@ -206,12 +207,70 @@ async function icon(Comp, color = "#FFFFFF") {
     text(s, "Text we can't read: at least HIGH, to an interpreter", { x: 8.2, y: 2.95, w: 1.3, h: 1.3, fontSize: 12, color: AMBER, bold: true, objectName: "Chip language" });
     anim(4, "Chip cut-off", "fade", "after", 0.1, 0.5);
     anim(4, "Chip language", "fade", "after", 0.1, 0.5);
-    s.addNotes("THE READERS, about 50 seconds.\nThree independent readers so no single failure hides an emergency. The AI model understands meaning (this runs on the Claude API). A small ML model we trained is the second opinion and works with no network. Fixed safety rules are a checklist that can't be talked out of a threat, and they ignore instructions inside a message.\nNone of them can lower a priority. Two more things: senders cut off by floods are raised two levels, and text we can't read is never ignored: it goes to an interpreter at HIGH.");
+    s.addNotes("THE READERS.\nThree independent readers so no single failure hides an emergency. The AI model understands meaning (this runs on the Claude API). A small ML model we trained is the second opinion and works with no network. Fixed safety rules are a checklist that can't be talked out of a threat, and they ignore instructions inside a message.\nNone of them can lower a priority. Two more things: senders cut off by floods are raised two levels, and text we can't read is never ignored: it goes to an interpreter at HIGH.");
   }
 
-  // ================================================================ 5. RESULTS
+  // ================================================================ 5. SECOND-OPINION FLOOR
   {
     const s = pres.addSlide(); n = 5; frame(s, n);
+    mono(s, "WE TESTED IT, FOUND A GAP, FIXED IT", { x: 0.6, y: 0.5, w: 6, h: 0.25, fontSize: 10, color: ACCENT, bold: true, charSpacing: 2, objectName: "Kicker" });
+    text(s, "The second-opinion floor", { x: 0.6, y: 0.82, w: 8.8, h: 0.7, fontSize: 34, bold: true, objectName: "Title" });
+
+    // left: what went wrong
+    card(s, 0.6, 1.7, 5.0, 3.2, { name: "Gap card" });
+    mono(s, "BENCHMARK MESSAGE M027  ·  TRULY HIGH", { x: 0.8, y: 1.85, w: 4.6, h: 0.22, fontSize: 10, color: MUTED, charSpacing: 1, objectName: "Gap label" });
+    text(s, "“fence and half the carport gone in the wind last night, water starting to pool near the house”", { x: 0.8, y: 2.12, w: 4.6, h: 0.75, fontSize: 14, color: TEXT, italic: true, objectName: "Gap message" });
+    const chip = (x, y, w, label, val, col, name) => {
+      s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y, w, h: 0.55, rectRadius: 0.08, fill: { color: RAISED }, line: { color: col, width: 1.5 }, objectName: name });
+      mono(s, label, { x: x + 0.12, y: y + 0.05, w: w - 0.24, h: 0.2, fontSize: 10, color: MUTED, objectName: name + " label" });
+      text(s, val, { x: x + 0.12, y: y + 0.24, w: w - 0.24, h: 0.28, fontSize: 15, bold: true, color: col, objectName: name + " value" });
+    };
+    chip(0.8, 3.05, 2.0, "AI MODEL SAID", "MEDIUM", MED, "Chip AI");
+    chip(3.2, 3.05, 2.2, "BACKUP MODEL SAID", "HIGH", HIGH, "Chip backup");
+    text(s, "≠", { x: 2.8, y: 3.05, w: 0.4, h: 0.55, fontSize: 24, bold: true, color: AMBER, align: "center", valign: "middle", objectName: "Disagree sign" });
+    text(s, "The system had been throwing that disagreement away, so a high message was missed.", { x: 0.8, y: 3.8, w: 4.6, h: 0.5, fontSize: 12.5, color: MUTED, objectName: "Gap note" });
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 0.8, y: 4.3, w: 4.6, h: 0.5, rectRadius: 0.08, fill: { color: "1F1710" }, line: { color: ACCENT, width: 1 }, objectName: "Rule box" });
+    text(s, [{ text: "RULE  ", options: { color: ACCENT, bold: true, fontFace: MONO, fontSize: 10 } },
+      { text: "backup says high or critical, AI lower: at least HIGH until a person reads it", options: { color: TEXT, fontSize: 12 } }],
+      { x: 0.92, y: 4.3, w: 4.4, h: 0.5, valign: "middle", objectName: "Rule text" });
+
+    // right: what it changed
+    card(s, 5.85, 1.7, 3.55, 3.2, { name: "Result card" });
+    mono(s, "WHAT IT CHANGED  ·  152 MESSAGES", { x: 6.05, y: 1.85, w: 3.2, h: 0.22, fontSize: 10, color: MUTED, charSpacing: 1, objectName: "Result label" });
+    const bar = (y, label, beforeV, afterV, max, fmt, colAfter, name) => {
+      text(s, label, { x: 6.05, y, w: 3.2, h: 0.25, fontSize: 12.5, bold: true, objectName: name + " title" });
+      [["before", beforeV, DIM], ["after", afterV, colAfter]].forEach(([k, v, col], j) => {
+        const yy = y + 0.3 + j * 0.34;
+        mono(s, k, { x: 6.05, y: yy + 0.02, w: 0.55, h: 0.2, fontSize: 10, color: MUTED, objectName: `${name} ${k} tag` });
+        s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 6.65, y: yy, w: 1.9, h: 0.22, rectRadius: 0.05, fill: { color: RAISED }, line: { color: RAISED }, objectName: `${name} ${k} track` });
+        s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 6.65, y: yy, w: Math.max(0.12, 1.9 * v / max), h: 0.22, rectRadius: 0.05, fill: { color: col }, line: { color: col }, objectName: `${name} ${k} fill` });
+        text(s, fmt(v), { x: 8.62, y: yy - 0.02, w: 0.7, h: 0.26, fontSize: 12, bold: true, color: k === "after" ? col : MUTED, objectName: `${name} ${k} value` });
+      });
+    };
+    const bu = BEF.full, au = B.full;
+    bar(2.2, "Urgent messages caught", bu.urgent_recall * 100, au.urgent_recall * 100, 100, (v) => v.toFixed(1) + "%", LOW, "Bar caught");
+    bar(3.3, "Routine messages escalated", bu.false_urgent, au.false_urgent, 20, (v) => `${v} / 97`, AMBER, "Bar routine");
+    text(s, "The price: 9 more routine messages to read. We think that trade is right.", { x: 6.05, y: 4.28, w: 3.2, h: 0.55, fontSize: 11.5, color: MUTED, objectName: "Result note" });
+
+    // animation: left to right
+    ["Gap card", "Gap label", "Gap message"].forEach((k, j) => anim(5, k, "fade", j === 0 ? "after" : "with", j === 0 ? 0.2 : 0, 0.5));
+    ["Chip AI", "Chip AI label", "Chip AI value"].forEach((k, j) => anim(5, k, "fade", j === 0 ? "after" : "with", j === 0 ? 0.3 : 0, 0.45));
+    ["Chip backup", "Chip backup label", "Chip backup value"].forEach((k, j) => anim(5, k, "fade", j === 0 ? "after" : "with", j === 0 ? 0.15 : 0, 0.45));
+    anim(5, "Disagree sign", "zoom", "after", 0.1, 0.4);
+    anim(5, "Gap note", "fade", "after", 0.2, 0.5);
+    anim(5, "Rule box", "wipe", "after", 0.3, 0.6);
+    anim(5, "Rule text", "fade", "with", 0.2, 0.5);
+    ["Result card", "Result label", "Bar caught title", "Bar caught before tag", "Bar caught before track", "Bar caught before fill", "Bar caught before value"].forEach((k, j) => anim(5, k, "fade", j === 0 ? "after" : "with", j === 0 ? 0.4 : 0, 0.5));
+    ["Bar caught after tag", "Bar caught after track", "Bar caught after fill", "Bar caught after value"].forEach((k, j) => anim(5, k, k.endsWith("fill") ? "wipe" : "fade", j === 0 ? "after" : "with", j === 0 ? 0.3 : 0, 0.6));
+    ["Bar routine title", "Bar routine before tag", "Bar routine before track", "Bar routine before fill", "Bar routine before value"].forEach((k, j) => anim(5, k, "fade", j === 0 ? "after" : "with", j === 0 ? 0.2 : 0, 0.5));
+    ["Bar routine after tag", "Bar routine after track", "Bar routine after fill", "Bar routine after value"].forEach((k, j) => anim(5, k, k.endsWith("fill") ? "wipe" : "fade", j === 0 ? "after" : "with", j === 0 ? 0.3 : 0, 0.6));
+    anim(5, "Result note", "fade", "after", 0.2, 0.5);
+    s.addNotes("THE FLOOR.\nThis is the part where we tested our own system and it was wrong. On the benchmark the AI model alone rated a message about a carport blowing away as MEDIUM. The small backup model had said HIGH. Our first pipeline simply ignored that disagreement, and a high message was missed.\nThe fix is one rule: if the backup model says high or critical and the AI says lower, hold it at HIGH until a person reads it. Two readers disagreeing towards urgent is itself a reason to look.\nDoes it work? Yes, and we measured it: urgent messages caught went from 94.5% to 98.2% on the 152-message benchmark (3 missed down to 1). The price is honest: routine messages escalated went from 1 to 10 of 97. We also apply it after the access boost, so a routine complaint can't jump two levels. There is a test for the rule, and the numbers come from report/collect_results.py (before and after).");
+  }
+
+  // ================================================================ 6. RESULTS
+  {
+    const s = pres.addSlide(); n = 6; frame(s, n);
     text(s, "Does it work?", { x: 0.6, y: 0.5, w: 5, h: 0.7, fontSize: 34, bold: true, objectName: "Title" });
     mono(s, "152 HAND-WRITTEN MESSAGES  ·  REAL AI VERDICTS  ·  55 TRULY URGENT", { x: 0.6, y: 1.15, w: 6, h: 0.22, fontSize: 10, color: MUTED, charSpacing: 1, objectName: "Subtitle" });
     const vals = [B.baseline.urgent_recall, B.rules.urgent_recall, B.ai.urgent_recall, B.full.urgent_recall, B.full_outage.urgent_recall].map((v) => Math.round(v * 1000) / 10);
@@ -221,7 +280,7 @@ async function icon(Comp, color = "#FFFFFF") {
       catAxisLabelColor: TEXT, catAxisLabelFontSize: 12, catAxisLabelFontFace: HEAD, catAxisOrientation: "maxMin", showLegend: false, showTitle: true, title: "Urgent messages caught",
       titleColor: MUTED, titleFontSize: 11, titleFontFace: HEAD, barGapWidthPct: 45, plotArea: { fill: { color: INK } }, objectName: "Results chart",
     });
-    anim(5, "Results chart", "wipe", "after", 0.3, 0.9);
+    anim(6, "Results chart", "wipe", "after", 0.3, 0.9);
     const big = [
       [`${Math.round(B.full.urgent_recall * 55)} / 55`, "urgent messages caught", LOW],
       [`${Math.round(B.full.critical_recall * 23)} / 23`, "critical messages on the 15-minute clock", LOW],
@@ -232,46 +291,71 @@ async function icon(Comp, color = "#FFFFFF") {
       card(s, 6.3, y, 3.2, 0.98, { name: `Big card ${i + 1}` });
       text(s, num, { x: 6.5, y: y + 0.1, w: 1.55, h: 0.75, fontSize: 28, bold: true, color: col, valign: "middle", objectName: `Big number ${i + 1}` });
       text(s, lab, { x: 8.05, y: y + 0.1, w: 1.35, h: 0.78, fontSize: 11.5, color: MUTED, valign: "middle", objectName: `Big label ${i + 1}` });
-      ["Big card", "Big number", "Big label"].forEach((k, j) => anim(5, `${k} ${i + 1}`, "fade", j === 0 ? "after" : "with", j === 0 ? 0.3 : 0, 0.5));
+      ["Big card", "Big number", "Big label"].forEach((k, j) => anim(6, `${k} ${i + 1}`, "fade", j === 0 ? "after" : "with", j === 0 ? 0.3 : 0, 0.5));
     });
     text(s, "Synthetic data that we wrote. Real-world scores will be lower.", { x: 0.6, y: 4.78, w: 6.5, h: 0.25, fontSize: 12, color: DIM, italic: true, objectName: "Honest note" });
-    anim(5, "Honest note", "fade", "after", 0.3, 0.5);
-    s.addNotes("RESULTS, about 55 seconds.\nThe chart is urgent messages caught, out of the 55 that are truly high or critical. The backup model alone catches 85% and only half the critical ones. The safety rules alone, 65%. The AI model alone is the best single reader at 94.5%. Together: 54 of 55, and all 23 critical messages on the 15-minute clock. Switch the AI off and it is still 98%.\nBe honest about the price: 10 of 97 routine messages get escalated, and we wrote this data ourselves, so real scores will be lower. That is why the report recommends a shadow pilot.\nNumbers come straight from the running system: report/collect_results.py.");
+    anim(6, "Honest note", "fade", "after", 0.3, 0.5);
+    s.addNotes("RESULTS.\nThe chart is urgent messages caught, out of the 55 that are truly high or critical. The backup model alone catches 85% and only half the critical ones. The safety rules alone, 65%. The AI model alone is the best single reader at 94.5%. Together: 54 of 55, and all 23 critical messages on the 15-minute clock. Switch the AI off and it is still 98%.\nBe honest about the price: 10 of 97 routine messages get escalated, and we wrote this data ourselves, so real scores will be lower. That is why the report recommends a shadow pilot.\nNumbers come straight from the running system: report/collect_results.py.");
   }
 
-  // ================================================================ 6. DEMO
-  {
-    const s = pres.addSlide(); n = 6; frame(s, n);
-    text(s, "Live demo", { x: 0.6, y: 0.45, w: 4.5, h: 0.9, fontSize: 46, bold: true, objectName: "Title" });
-    mono(s, "ABOUT 4½ MINUTES  ·  CLICK A STEP TO OPEN IT", { x: 0.6, y: 1.3, w: 4.6, h: 0.22, fontSize: 10, color: AMBER, charSpacing: 1, objectName: "Subtitle" });
-    const steps = [
-      ["The live queue, and who needs a human now", "queue"],
-      ["Follow one message through the checks", "journey"],
-      ["Try to break it: injection, unreadable text", "try"],
-      ["Nobody acts, so it escalates", "queue"],
-      ["The scores, even with the AI off", "compare"],
-    ];
-    steps.forEach(([t, view], i) => {
-      const y = 1.85 + i * 0.58;
-      card(s, 0.6, y, 4.55, 0.48, { name: `Step ${i + 1}` });
-      dot(s, 0.72, y + 0.09, 0.3, i === 0 ? ACCENT : RAISED, `Step ${i + 1} dot`);
-      mono(s, String(i + 1), { x: 0.72, y: y + 0.09, w: 0.3, h: 0.3, fontSize: 12, bold: true, align: "center", valign: "middle", objectName: `Step ${i + 1} number` });
-      text(s, t, { x: 1.18, y: y + 0.02, w: 3.9, h: 0.44, fontSize: 13, valign: "middle", objectName: `Step ${i + 1} text` });
-      ["", " dot", " number", " text"].forEach((k, j) => anim(6, `Step ${i + 1}${k}`, "fade", j === 0 ? "after" : "with", j === 0 ? 0.15 : 0, 0.4));
-    });
-    s.addImage({ path: path.join(HERE, "assets", "console_preview.gif"), x: 5.45, y: 0.55, w: 4.05, h: 4.05 * 764 / 1100, altText: "Animated preview of the console", objectName: "Console preview" });
-    card(s, 5.45, 3.75, 4.05, 0.62, { fill: ACCENT, line: ACCENT, name: "Open button" });
-    text(s, "OPEN THE CONSOLE  ▶", { x: 5.45, y: 3.75, w: 4.05, h: 0.62, fontSize: 18, bold: true, align: "center", valign: "middle", objectName: "Open button text" });
-    mono(s, "127.0.0.1:5050  ·  seed 2026  ·  no AI credit used", { x: 5.45, y: 4.5, w: 4.05, h: 0.22, fontSize: 10, color: DIM, align: "center", objectName: "Console address" });
-    anim(6, "Console preview", "fade", "after", 0.2, 0.6);
-    anim(6, "Open button", "fade", "after", 0.1, 0.4);
-    anim(6, "Open button text", "fade", "with", 0, 0.4);
-    s.addNotes("DEMO, about 4 minutes 30 seconds. Click OPEN THE CONSOLE (or Alt+Tab to the browser, already open on http://127.0.0.1:5050).\n\n1. LIVE QUEUE (60s): press PLAY, let messages arrive, then pause. Point at the dark panel: it only shows what is overdue or silent. Open one row: full reasoning and draft reply.\n2. HOW IT WORKS tab (60s): pick a critical message, press REPLAY. Channel, then six checks, then the named team and the escalation ladder.\n3. TRY A MESSAGE (75s): click 'Prompt injection', TRIAGE IT: still critical. Then 'Unreadable language (stand-in)': goes to the interpreter desk at HIGH. Say the stand-in text is invented, not a real language.\n4. ESCALATION (45s): drag the timeline to about +240 min, set ACTING AS to Shift supervisor, ACKNOWLEDGE an overdue row.\n5. EVALUATION (60s): point at the bars, then the AI-off row.\n\nDo NOT press NEW SHIFT on stage (it spends credit). If the site fails, the preview on this slide and the backup slide show the same thing.");
-  }
-
-  // ================================================================ 7. CLOSE
+  // ================================================================ 7. CONSOLE FEATURES
   {
     const s = pres.addSlide(); n = 7; frame(s, n);
+    text(s, "What is inside the console", { x: 0.6, y: 0.45, w: 8.8, h: 0.65, fontSize: 32, bold: true, objectName: "Title" });
+    mono(s, "REAL SCREENSHOTS FROM THE RUNNING SYSTEM", { x: 0.6, y: 1.07, w: 6, h: 0.22, fontSize: 10, color: MUTED, charSpacing: 1, objectName: "Subtitle" });
+    const tiles = [
+      ["feat_console.png", "Shift timeline", "Drag the clock. The dark panel lists what is overdue or silent."],
+      ["feat_journey.png", "Follow one message", "Six checks, then the named team and the escalation ladder."],
+      ["feat_map.png", "NT map", "Messages flow to the triage centre. Pins pulse when overdue."],
+      ["feat_eval.png", "Live scores", "Computed against a hidden answer key, with the AI switched off too."],
+    ];
+    tiles.forEach(([file, h, c], i) => {
+      const x = 0.6 + (i % 2) * 4.5, y = 1.45 + Math.floor(i / 2) * 1.68;
+      card(s, x, y, 4.3, 1.55, { name: `Tile ${i + 1}` });
+      s.addImage({ path: path.join(HERE, "assets", file), x: x + 0.1, y: y + 0.12, w: 2.2, h: 1.32, altText: h, objectName: `Tile ${i + 1} image` });
+      text(s, h, { x: x + 2.45, y: y + 0.15, w: 1.75, h: 0.3, fontSize: 14, bold: true, objectName: `Tile ${i + 1} title` });
+      text(s, c, { x: x + 2.45, y: y + 0.5, w: 1.75, h: 0.95, fontSize: 11.5, color: MUTED, objectName: `Tile ${i + 1} text` });
+      ["", " image", " title", " text"].forEach((k, j) => anim(7, `Tile ${i + 1}${k}`, "fade", j === 0 ? "after" : "with", j === 0 ? 0.2 : 0, 0.45));
+    });
+    mono(s, "ALSO:  THREE ROLES  ·  WELFARE CHECKS  ·  AUDIT LOG  ·  TRY ANY MESSAGE", { x: 0.6, y: 4.88, w: 8.8, h: 0.22, fontSize: 10, color: AMBER, charSpacing: 1, objectName: "Also line" });
+    anim(7, "Also line", "fade", "after", 0.2, 0.5);
+    s.addNotes("FEATURES. Don't explain each tile, point at them and say you'll show them live in a moment.\nShift timeline: you can drag the clock and the whole console follows. How It Works follows one real message through six checks. The map shows messages flowing to the triage centre in Darwin, and pins pulse when something is overdue. Evaluation computes the scores live against a hidden answer key.\nAlso in there: three roles (officer, shift supervisor, duty manager), a welfare-check log for senders who go quiet, an audit log of who did what, and a box where you can type any message.");
+  }
+
+  // ================================================================ 8. DEMO
+  {
+    const s = pres.addSlide(); n = 8; frame(s, n);
+    text(s, "Live demo", { x: 0.6, y: 0.45, w: 4.5, h: 0.9, fontSize: 46, bold: true, objectName: "Title" });
+    mono(s, "CLICK A STEP TO OPEN IT", { x: 0.6, y: 1.3, w: 4.4, h: 0.22, fontSize: 10, color: AMBER, charSpacing: 1, objectName: "Subtitle" });
+    const steps = [
+      "The live queue, and who needs a human now",
+      "Follow one message through the checks",
+      "Try to break it: injection, unreadable text",
+      "Nobody acts, so it escalates",
+      "The scores, even with the AI off",
+    ];
+    steps.forEach((t, i) => {
+      const y = 1.85 + i * 0.6;
+      card(s, 0.6, y, 4.6, 0.5, { name: `Step ${i + 1}` });
+      dot(s, 0.72, y + 0.1, 0.3, i === 0 ? ACCENT : RAISED, `Step ${i + 1} dot`);
+      mono(s, String(i + 1), { x: 0.72, y: y + 0.1, w: 0.3, h: 0.3, fontSize: 12, bold: true, align: "center", valign: "middle", objectName: `Step ${i + 1} number` });
+      text(s, t, { x: 1.18, y: y + 0.03, w: 3.95, h: 0.44, fontSize: 13, valign: "middle", objectName: `Step ${i + 1} text` });
+      ["", " dot", " number", " text"].forEach((k, j) => anim(8, `Step ${i + 1}${k}`, "fade", j === 0 ? "after" : "with", j === 0 ? 0.15 : 0, 0.4));
+    });
+    s.addImage({ path: path.join(HERE, "assets", "console_preview.gif"), x: 5.45, y: 0.5, w: 4.05, h: 4.05 * 764 / 1100, altText: "Short looping preview of the console", objectName: "Console preview" });
+    card(s, 5.45, 3.6, 4.05, 0.62, { fill: ACCENT, line: ACCENT, name: "Open button" });
+    text(s, "OPEN THE CONSOLE  \u25B6", { x: 5.45, y: 3.6, w: 4.05, h: 0.62, fontSize: 18, bold: true, align: "center", valign: "middle", objectName: "Open button text" });
+    mono(s, "127.0.0.1:5050  \u00B7  seed 2026  \u00B7  no AI credit used", { x: 5.45, y: 4.35, w: 4.05, h: 0.22, fontSize: 10, color: DIM, align: "center", objectName: "Console address" });
+    anim(8, "Console preview", "fade", "after", 0.2, 0.6);
+    anim(8, "Open button", "fade", "after", 0.1, 0.4);
+    anim(8, "Open button text", "fade", "with", 0, 0.4);
+    anim(8, "Console address", "fade", "with", 0, 0.4);
+    s.addNotes("DEMO. Click OPEN THE CONSOLE (or Alt+Tab to the browser, already open on http://127.0.0.1:5050). The loop on this slide is a short video of the same console playing a shift.\n\n1. LIVE QUEUE: press PLAY, let messages arrive, then pause. Point at the dark panel: only what is overdue or silent. Open one row: full reasoning and draft reply.\n2. HOW IT WORKS tab: pick a critical message, press REPLAY. Channel, six checks, named team, escalation ladder.\n3. TRY A MESSAGE: click 'Prompt injection', TRIAGE IT: still critical. Then 'Unreadable language (stand-in)': to the interpreter desk at HIGH. Say the stand-in text is invented.\n4. ESCALATION: drag the timeline to about +240 min, set ACTING AS to Shift supervisor, ACKNOWLEDGE an overdue row.\n5. EVALUATION: point at the bars, then the AI-off row.\n\nDo NOT press NEW SHIFT with an empty seed on stage: it makes live AI calls, costs credit and needs the internet. Typing a seed that has been run before (2026, 4242) is instant and free.");
+  }
+
+  // ================================================================ 9. CLOSE
+  {
+    const s = pres.addSlide(); n = 9; frame(s, n);
     text(s, "What is real. What is next. What we won't do.", { x: 0.6, y: 0.5, w: 8.8, h: 0.7, fontSize: 30, bold: true, objectName: "Title" });
     const cols = [
       [fa.FaCheckCircle, LOW, "Real today", "The full pipeline, escalation clocks, silent-sender checks, an inbound endpoint, an audit trail and 97 tests. AI verdicts are real."],
@@ -285,50 +369,40 @@ async function icon(Comp, color = "#FFFFFF") {
       await badge(s, x + 0.2, 1.55, 0.55, col, Ic, `Column ${i + 1}`);
       text(s, h, { x: x + 0.2, y: 2.22, w: 2.4, h: 0.35, fontSize: 18, bold: true, objectName: `Column ${i + 1} title` });
       text(s, c, { x: x + 0.2, y: 2.62, w: 2.45, h: 1.0, fontSize: 12, color: MUTED, objectName: `Column ${i + 1} text` });
-      ["", " badge", " icon", " title", " text"].forEach((k, j) => anim(7, `Column ${i + 1}${k}`, "fade", j === 0 ? "after" : "with", j === 0 ? 0.2 : 0, 0.45));
+      ["", " badge", " icon", " title", " text"].forEach((k, j) => anim(9, `Column ${i + 1}${k}`, "fade", j === 0 ? "after" : "with", j === 0 ? 0.2 : 0, 0.45));
     }
     mono(s, "OUR WARNINGS:  SYNTHETIC DATA  ·  30% ON THE CRITICAL CLOCK  ·  ONE MODEL, ENGLISH ONLY", { x: 0.6, y: 3.85, w: 8.8, h: 0.22, fontSize: 10, color: AMBER, charSpacing: 1, objectName: "Warnings" });
     card(s, 0.6, 4.2, 8.8, 0.7, { fill: PANEL, line: BORDER, name: "Closing banner" });
     text(s, "Questions?", { x: 0.9, y: 4.2, w: 3.0, h: 0.7, fontSize: 28, bold: true, valign: "middle", objectName: "Questions" });
     text(s, "Help people. Never replace them.", { x: 4.2, y: 4.2, w: 5.0, h: 0.7, fontSize: 20, bold: true, color: AMBER, align: "right", valign: "middle", objectName: "Principle" });
-    anim(7, "Warnings", "fade", "after", 0.2, 0.5);
-    anim(7, "Closing banner", "fade", "after", 0.2, 0.5);
-    anim(7, "Questions", "fade", "with", 0, 0.5);
-    anim(7, "Principle", "fade", "with", 0.2, 0.5);
-    s.addNotes("CLOSE, about 50 seconds.\nBe straight about what is real: the pipeline, the clocks, the silent-sender check, the audit trail and the real AI verdicts. Next: a shadow pilot for one wet season, real SMS and email feeds, and language phrases reviewed by speakers and held under community control. Never: auto-replies, lowering a priority, pretending to understand a language we can't read.\nOur own warnings are on the slide: synthetic data, 30% of messages reach the critical clock because of the access boost, one model, English only.\nEnd on: help people, never replace them. Then Questions. Backup slides follow if asked (they are hidden).");
+    anim(9, "Warnings", "fade", "after", 0.2, 0.5);
+    anim(9, "Closing banner", "fade", "after", 0.2, 0.5);
+    anim(9, "Questions", "fade", "with", 0, 0.5);
+    anim(9, "Principle", "fade", "with", 0.2, 0.5);
+    s.addNotes("CLOSE.\nBe straight about what is real: the pipeline, the clocks, the silent-sender check, the audit trail and the real AI verdicts. Next: a shadow pilot for one wet season, real SMS and email feeds, and language phrases reviewed by speakers and held under community control. Never: auto-replies, lowering a priority, pretending to understand a language we can't read.\nOur own warnings are on the slide: synthetic data, 30% of messages reach the critical clock because of the access boost, one model, English only.\nEnd on: help people, never replace them. Then Questions. Backup slides follow if asked (they are hidden).");
   }
 
-  // ================================================================ BACKUP A: demo fallback
+  // ================================================================ BACKUP A: fairness, language, a late bug
   {
-    const s = pres.addSlide(); frame(s, 0, true); n = 8;
-    text(s, "If the live demo fails", { x: 0.6, y: 0.45, w: 8, h: 0.6, fontSize: 30, bold: true, objectName: "Title" });
-    mono(s, "THE SAME CONSOLE, PLAYING A SHIFT FROM 06:45 TO 10:30 (SEED 2026)", { x: 0.6, y: 1.05, w: 8, h: 0.22, fontSize: 10, color: MUTED, charSpacing: 1, objectName: "Subtitle" });
-    const w = 5.2;
-    s.addImage({ path: path.join(HERE, "assets", "console_preview.gif"), x: (10 - w) / 2, y: 1.5, w, h: w * 764 / 1100, altText: "Animated preview of the console", objectName: "Console preview" });
-    s.addNotes("BACKUP: only if the website will not start. Talk over the loop: the timeline moves, messages arrive, the dark panel fills with what is overdue, escalation climbs to the duty manager.");
-  }
-
-  // ================================================================ BACKUP B: fairness, language, floor
-  {
-    const s = pres.addSlide(); frame(s, 0, true); n = 9;
-    text(s, "Fairness, language, and the second-opinion floor", { x: 0.6, y: 0.45, w: 8.8, h: 0.6, fontSize: 28, bold: true, objectName: "Title" });
+    const s = pres.addSlide(); frame(s, 0, true); n = 10;
+    text(s, "Fairness, language, and a bug we found late", { x: 0.6, y: 0.45, w: 8.0, h: 0.6, fontSize: 28, bold: true, objectName: "Title" });
     const tiles = [
       ["4 of 5", "fairness pairs got the same final priority (AI model 4, backup model 3). The exception: formal wording made the backup model nervous.", TEAL],
-      ["8 → 0", "urgent messages buried in unreadable text, after the readability check. The price: all 8 routine ones were raised to high too.", LOW],
-      ["94.5% → 98.2%", "urgent recall after the second-opinion floor. The price: routine messages escalated went from 1 to 10 of 97.", AMBER],
+      ["8 \u2192 0", "urgent messages buried in unreadable text, after the readability check. The price: all 8 routine ones were raised to high too.", LOW],
+      ["1 rule", "A message reading \u201CNOT SAFE HERE TONIGHT\u201D went to Customer service. Its priority was right, so the Duty Officer was copied, but we added the missing rule.", AMBER],
     ];
     tiles.forEach(([big, txt, col], i) => {
       const x = 0.6 + i * 3.0;
       card(s, x, 1.4, 2.8, 3.0, { name: `Tile ${i + 1}` });
-      text(s, big, { x: x + 0.2, y: 1.6, w: 2.4, h: 0.7, fontSize: i === 2 ? 24 : 34, bold: true, color: col, objectName: `Tile ${i + 1} number` });
+      text(s, big, { x: x + 0.2, y: 1.6, w: 2.4, h: 0.7, fontSize: 34, bold: true, color: col, objectName: `Tile ${i + 1} number` });
       text(s, txt, { x: x + 0.2, y: 2.45, w: 2.4, h: 1.8, fontSize: 13, color: MUTED, objectName: `Tile ${i + 1} text` });
     });
-    s.addNotes("BACKUP: use if asked about fairness, language, or why the system escalates some routine messages. Full tables are in the report (sections 3.2, 3.4, 3.5).");
+    s.addNotes("BACKUP: use if asked about fairness, language, or what went wrong. Full detail is in the report (sections 3.4, 3.5, 3.6, Appendix J).");
   }
 
   // ================================================================ BACKUP C: likely questions
   {
-    const s = pres.addSlide(); frame(s, 0, true); n = 10;
+    const s = pres.addSlide(); frame(s, 0, true); n = 11;
     text(s, "Questions we expect", { x: 0.6, y: 0.45, w: 8, h: 0.6, fontSize: 30, bold: true, objectName: "Title" });
     const qa = [
       ["Is the data real?", "No. We wrote it, so scores are optimistic. The pipeline and the AI verdicts are real."],

@@ -1,64 +1,56 @@
-# Judge Q&A prep
+# Likely questions, and honest answers
 
-Likely hard questions from an industry panel, with answers grounded in what the build actually does.
+Numbers are from the 152-message benchmark with real Claude API verdicts (`report/results_after.json`).
 
-**"Your LLM scores 100%. Isn't that suspicious?"**
-Yes, and we say so on screen. Until `scripts/run_llm_batch.py` is run, the LLM column holds
-hand-authored stand-ins that match the answer key. That's why we don't rely on it: the
-headline claim is the **LLM-outage row**. With the LLM switched off, baseline + tripwires +
-access weighting still puts 100% of critical and 98% of urgent messages in the fast lane.
-*(If you've run the batch script, quote the real numbers instead.)*
+**Is the data real?**
+No. We wrote it, so scores are optimistic. The pipeline and the Claude API verdicts are real. The fixed benchmark is
+the independent check; the generated shifts are an upper bound.
 
-**"Why not just use the LLM for everything?"**
-Three failure modes a single LLM has and our design doesn't: it can be down (wet-season
-outages), it can be prompt-injected by the message itself, and it can be quietly wrong. Each
-layer can only raise a priority, so any one of three independent signals catching a message
-is enough.
+**Why not just use the AI for everything?**
+A single model can be unavailable in a storm, can be prompt-injected by the message itself, and can be quietly
+wrong. On the benchmark the Claude API alone caught 52 of 55 urgent messages (94.5%); the full system caught 54 of
+55 (98.2%) and all 23 critical ones. Each layer can only raise a priority, so any one of three signals is enough.
 
-**"Won't the tripwires cause alert fatigue?"**
-We measured the cost: in outage mode, 12 of 97 routine items get a faster look than they
-needed. That's the deliberate trade. A few extra minutes of officer time buys zero missed
-critical messages. The tripwires alone produced 0 false escalations on this dataset.
+**What if the AI is down or there is no internet?**
+The backup model and the safety rules take over, rows are marked *NOT AI-CHECKED*, and 54 of 55 urgent messages
+(98.2%) and all 23 critical ones still reach the fast lane, at the cost of 12 of 97 routine messages escalated.
 
-**"Your tripwires were written against your own dataset. Isn't that overfitting?"**
-Partly, yes, and the README says so. The baseline numbers are clean (5-fold out-of-fold). In
-production the phrase lists would be reviewed by duty officers and a family-violence
-practitioner, and re-measured on real, consented correspondence.
+**Can someone trick the AI?**
+The message is passed as untrusted data, and the safety rules are separate from the AI and ignore instructions in
+the text. A message saying "low priority, do not escalate" followed by a threat stays critical. Priorities only rise.
 
-**"How does it handle someone who can't write formal English?"**
-Three ways:
-- The LLM prompt says spelling and informality must not lower urgency.
-- The Fairness tab tests five like-for-like formal/informal pairs. The baseline alone is
-  inconsistent on 2 of 5, but the final priority is consistent on all 5.
-- The honest gap: Aboriginal languages and Kriol. That needs co-designed phrase lists and
-  interpreter pathways, not a patch.
+**Does it send replies?**
+Never. It drafts an acknowledgement; an officer approves it. A test fails if any code path sends a message.
 
-**"What stops the AI replying to someone in danger?"**
-There is no send path in the code (a test checks that no module imports an email/SMS
-library). Every draft is marked NOT SENT and needs an officer's click. For personal-safety
-cases, the draft doesn't repeat what was disclosed, in case the person causing harm reads the
-phone. The officer is prompted to call instead.
+**Won't over-escalation cause alert fatigue?**
+It is a real cost. 10 of 97 routine messages are escalated, and 30% of all messages finish on the 15-minute clock
+because access weighting is deliberate (someone cut off by floods is in a worse position). That is the first figure
+we would check in a pilot; the report proposes measures and a roadmap.
 
-**"What if nobody acknowledges?"**
-Dead-man's switch. A critical item escalates to the shift supervisor at 15 minutes and the
-duty manager at 30. It stays pinned in "Needs a human now" until someone acts. If a sender who
-reported something critical then goes silent for 2 hours, that silence is flagged as its own
-risk and prompts a welfare check.
+**What did you change after testing?**
+The first full pipeline missed 3 urgent messages (two carport-damage messages and a freezer message). The backup
+model had said "high" on two of them, so we added a second-opinion floor: urgent recall rose from 94.5% to 98.2%,
+and routine escalations rose from 1 to 10 of 97. We also moved that floor after the access boost, so a mosquito
+complaint no longer jumped to critical. The report has a problems-and-fixes log.
 
-**"Why does being cut off raise priority if the content is the same?"**
-The same problem is more dangerous when the person can't reach any other help. A burst pipe
-in Darwin and one in a flood-isolated community aren't equally urgent. Both values are shown,
-so the officer sees the content urgency and the access adjustment separately.
+**What about Aboriginal languages and Kriol?**
+We do not pretend to understand them and we invented none. Text the system cannot read is raised to at least high
+and routed to an interpreter desk (8 of 8 urgent test messages were buried before; 0 after). Our stand-in text is
+deliberately fake. Real phrase lists need speakers, under community control (CARE and Maiam nayri Wingara principles).
 
-**"Privacy? You're sending public correspondence to an external AI."**
-It would need a privacy impact assessment and a data-residency review before production. The
-offline mode (baseline + tripwires) is also the privacy-preserving fallback: it works with no
-data leaving the building.
+**Is it fair to people who write informally?**
+Five formal/informal pairs: the final priority matched on 4 of 5 (the AI model 4 of 5, the backup model 3 of 5). The
+exception is a routine request where the formal wording made the backup model rate it high, and the floor passed
+that on. It errs in the safe direction but it is a difference, and the report says so.
 
-**"What would you build next?"**
-In order:
-1. Real evaluation data.
-2. A persistent audit log with officer identity.
-3. Live access status from road-closure and outage feeds.
-4. Real channel ingestion.
-5. Language co-design.
+**Privacy?**
+All messages here are synthetic. A real deployment needs a privacy impact assessment, redaction of personal details
+and Australian hosting before any message goes to an external API (Information Act 2002 (NT); Privacy Act 1988 (Cth)).
+
+**What is real and what is simulated?**
+Real: the pipeline, the Claude API calls, safety rules, escalation logic, inbound endpoint (`POST /api/ingest`),
+audit log. Simulated: the shift clock, the message source, and in-memory storage.
+
+**How much does it cost to run?**
+A fraction of a US cent a message at the rates we paid (about 10 to 25 US cents for a brand-new 55-message shift); the 152-message benchmark run cost well under one dollar.
+Answers are saved by message, so replaying a shift is free.
