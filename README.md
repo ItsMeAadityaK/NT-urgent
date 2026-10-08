@@ -220,8 +220,11 @@ the API, whatever is in your shell.
 
 The talk is a short PowerPoint plus a live demo:
 
-- `presentation/NT-Triage-Deck.pptx`: 6 slides (title, problem, how it works, three layers, demo divider,
-  what is real / next), with speaker notes in each.
+- `presentation/NT-Triage-Deck.pptx`: 7 slides plus 3 hidden backups (demo fallback, fairness and language, likely
+  questions). Dark "console" design, native chart, animations that play by themselves, a fade between slides, clickable
+  navigation dots, and a demo slide whose steps open the console on the right tab. Speaker notes with timings are in each
+  slide. `NT-Triage-Deck-handout.pdf` is a static copy. It is built by `presentation/build_deck.js`
+  (pptxgenjs) and then finished by `presentation/polish_deck.ps1`, which uses PowerPoint to add the animations and links.
 - The demo runs on this site, opened on seed 2026 (replays saved Claude verdicts, so it costs nothing).
 - `/script.html` is the printable speaker sheet: timings for each slide and demo step (about 9:30 in all),
   what to click, and 12 likely judge questions with answers. The text lives in `static/script-data.js`.
@@ -238,15 +241,16 @@ the escalation ladder, and replays as an animation. Use it as demo step 2.
 
 ## The report
 
-`report/DataChallenge_Team AIC023_Report.pdf` is the written report (PDF, A4, Arial, 8 body pages plus references and
-appendices). It is interactive: sidebar bookmarks, a clickable contents list, citations that jump to the reference,
+`report/AIChallenge_Team AIC023_Report.pdf` is the written report (PDF, A4, Arial, 8 body pages plus references and
+appendices). `report/AIChallenge_Team AIC023_Report.docx` is the same report as an editable Word file. It is interactive: sidebar bookmarks, a clickable contents list, citations that jump to the reference,
 and source links. Every number in it is read from the running system, not typed:
 
 ```
 python report/collect_results.py before   # without the second-opinion floor
 python report/collect_results.py after    # current system
 python report/figures.py
-python report/build_report.py
+python report/build_report.py   # the PDF
+python report/build_docx.py     # the Word version
 ```
 
 The benchmark's AI verdicts are real: `python scripts/run_llm_batch.py` ran all 152 messages through the Claude API once
