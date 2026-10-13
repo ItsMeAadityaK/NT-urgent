@@ -21,7 +21,7 @@ the system cannot read goes to an interpreter desk instead of sinking to the bot
 | Item | Where |
 |---|---|
 | Project report (PDF and editable Word) | `report/AIChallenge_Team AIC023_Report.pdf`, `.docx` |
-| Presentation slides (+ static PDF copy) | `presentation/NT-Triage-Deck-v2.pptx`, `NT-Triage-Deck-handout.pdf` |
+| Presentation slides (+ static PDF copy) | `presentation/NT-Triage-Deck.pptx`, `NT-Triage-Deck-handout.pdf` |
 | Source code (Python, commented at the key steps) | `src/`, `server.py`, `scripts/`, `tests/` |
 | Web console (HTML, CSS, JavaScript) | `static/` |
 | Data (synthetic, written by us) and saved AI answers | `data/` |
@@ -62,7 +62,7 @@ judge them (roughly 10 to 25 US cents). A seed that has been run before replays 
 
 ## Using the live Claude API (optional)
 
-Put a key in a file called `.env` in the project folder (it is git-ignored; never paste a key anywhere else):
+**This submission already includes a `.env` file** (a hidden file in the project folder) holding a key with a small credit balance, so you can press NEW SHIFT with an empty seed and see the live Claude API judge a brand-new shift (roughly 10 to 25 US cents each; a built-in cap stops a runaway). Please do not share it. To use your own key instead, replace the line in `.env`:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
@@ -91,7 +91,7 @@ python scripts/language_parity.py           # the unreadable-text test (8 of 8 u
 
 To rebuild the report itself (optional): `pip install -r requirements-report.txt`, then
 `python report/figures.py`, `python report/build_report.py` (PDF) and `python report/build_docx.py` (Word).
-`report/shots/` holds the interface screenshots used in the figures.
+The interface figures are the ready-made `report/fig_*.png` files (the large raw screenshots they were cropped from are left out to keep the ZIP small; `figures.py` skips any that are missing).
 
 ---
 
